@@ -36,6 +36,11 @@ class FridgeVisionPipeline(
     companion object {
         private const val TAG = "FridgeVisionPipeline"
         private const val CROP_PADDING_RATIO = 0.08f
+        private val NON_FOOD_LABELS = setOf(
+            "Средства гигиены",
+            "Канцелярия",
+            "Бумажные салфетки"
+        )
     }
 
     private val engineMutex = Mutex()
@@ -55,6 +60,11 @@ class FridgeVisionPipeline(
             val catalog = productDao.observeAll().first()
             val results = mutableListOf<RecognizedProduct>()
             for (detection in detections) {
+                if (detection.label in NON_FOOD_LABELS) {
+                    Log.d(TAG, "Ignoring non-food detection: ${detection.label}")
+                    continue
+                }
+
                 // YOLO predicts a broad category, not necessarily an exact catalog product.
                 // Only accept an exact catalog-name match; otherwise preserve the detected class.
                 val crop = cropDetection(bitmap, detection)
