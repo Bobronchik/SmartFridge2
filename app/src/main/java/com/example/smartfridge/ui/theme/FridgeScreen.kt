@@ -48,6 +48,7 @@ fun FridgeScreen(
     onScan: () -> Unit,
     onAdd: () -> Unit,
     onDelete: (FridgeProduct) -> Unit = {},
+    onUpdateProduct: (FridgeProduct) -> Unit = {},
     darkTheme: Boolean = false,
     onThemeChange: (Boolean) -> Unit = {},
     cameraAddress: String = "",
@@ -63,6 +64,7 @@ fun FridgeScreen(
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
+    var productToEdit by remember { mutableStateOf<FridgeProduct?>(null) }
 
     val expiringCount = state.allProducts.count {
         getFreshness(it.expiresAt) == Freshness.EXPIRING_SOON
@@ -123,7 +125,8 @@ fun FridgeScreen(
                 onSearch = onSearch,
                 onCategory = onCategory,
                 onAdd = onAdd,
-                onDelete = { productToDelete = it }
+                onDelete = { productToDelete = it },
+                onEdit = { productToEdit = it }
             )
             MainTab.RECIPES -> ExpiringRecipesPanel(
                 padding = scaffoldPadding,
@@ -159,6 +162,17 @@ fun FridgeScreen(
         )
     }
 
+    productToEdit?.let { product ->
+        EditProductDialog(
+            product = product,
+            onDismiss = { productToEdit = null },
+            onSave = { updated ->
+                onUpdateProduct(updated)
+                productToEdit = null
+            }
+        )
+    }
+
     productToDelete?.let { product ->
         AlertDialog(
             onDismissRequest = { productToDelete = null },
@@ -187,7 +201,8 @@ private fun FridgeHome(
     onSearch: (String) -> Unit,
     onCategory: (String?) -> Unit,
     onAdd: () -> Unit,
-    onDelete: (FridgeProduct) -> Unit
+    onDelete: (FridgeProduct) -> Unit,
+    onEdit: (FridgeProduct) -> Unit
 ) {
     val visibleCategories = state.products
         .map { it.category }
@@ -376,7 +391,7 @@ private fun FridgeHome(
             }
         } else {
             items(state.products, key = { it.id }) { product ->
-                ProductCard(product = product, onDelete = { onDelete(product) })
+                ProductCard(product = product, onDelete = { onDelete(product) }, onEdit = { onEdit(product) })
             }
         }
 
@@ -428,7 +443,7 @@ private fun SmallMetric(
 }
 
 @Composable
-private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
+private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: () -> Unit) {
     val freshness = getFreshness(product.expiresAt)
     val status: String
     val color: Color
@@ -484,8 +499,13 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
                     }
                 }
             }
-            TextButton(onClick = onDelete, contentPadding = PaddingValues(4.dp)) {
-                Text("⋯", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 21.sp)
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+                    Text("Изменить", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp)
+                }
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+                    Text("Удалить", color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
+                }
             }
         }
     }
@@ -842,3 +862,73 @@ private fun ScanReviewDialog(
         }
     }
 }
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditProductDialog(
+    product: FridgeProduct,
+    onDismiss: () -> Unit,
+    onSave: (FridgeProduct) -> Unit
+) {
+    var name by remember(product.id) { mutableStateOf(product.name) }
+    var quantity by remember(product.id) { mutableStateOf(product.quantity.toString()) }
+    var expiryDate by remember(product.id) { mutableStateOf(product.expiresAt) }
+    var exact by remember(product.id) { mutableStateOf(product.isExactDate) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = expiryDate)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Изменить продукт") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Название") }, singleLine = true)
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { value -> quantity = value.filter { it.isDigit() || it == '.' || it == ',' } },
+                    label = { Text("Количество") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true
+                )
+                OutlinedButton(onClick = {
+                    datePickerState.selectedDateMillis = expiryDate
+                    showDatePicker = true
+                }) {
+                    Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(expiryDate)))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = exact, onCheckedChange = { exact = it })
+                    Text("Дата точная (с упаковки)", fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val parsedQuantity = quantity.replace(',', '.').toFloatOrNull()
+                    if (name.isNotBlank() && parsedQuantity != null && parsedQuantity.isFinite() && parsedQuantity > 0f) {
+                        onSave(product.copy(name = name.trim(), quantity = parsedQuantity, expiresAt = expiryDate, isExactDate = exact))
+                    }
+                },
+                enabled = name.isNotBlank() && (quantity.replace(',', '.').toFloatOrNull()?.let { it.isFinite() && it > 0f } == true)
+            ) { Text("Сохранить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { expiryDate = it }
+                    showDatePicker = false
+                }) { Text("Выбрать") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }
+        ) { DatePicker(state = datePickerState, showModeToggle = false) }
+    }
+}
+
