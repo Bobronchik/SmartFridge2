@@ -85,7 +85,7 @@ fun AddProductDialog(
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PickerMint, unfocusedBorderColor = Color(0xFFE5EBE6))
                     )
-                    Text(if (customMode) "Свой продукт" else "Выбери продукт", color = PickerInk, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(if (customMode) "Свой продукт" else "Выбери продукт", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     if (!customMode) {
                         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 230.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             items(filtered, key = { it.id }) { product ->
@@ -97,7 +97,7 @@ fun AddProductDialog(
                                         .padding(horizontal = 13.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
                                         Text(product.icon, fontSize = 22.sp)
                                     }
                                     Spacer(Modifier.width(11.dp))
@@ -113,7 +113,7 @@ fun AddProductDialog(
                             }
                         }
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Color(0xFFF4F5F1))
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { customMode = true; selected = null; customName = query }
                                 .padding(13.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -154,7 +154,7 @@ fun AddProductDialog(
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().background(Color(0xFFF8FAF7)).padding(16.dp),
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) {
