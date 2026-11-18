@@ -180,7 +180,11 @@ class FridgeVisionPipeline(
         }
     }
 
-    fun close() {
-        yoloDetector.close()
+    suspend fun release() {
+        try {
+            yoloDetector.close()
+        } finally {
+            ocr.release()
+        }
     }
 }
