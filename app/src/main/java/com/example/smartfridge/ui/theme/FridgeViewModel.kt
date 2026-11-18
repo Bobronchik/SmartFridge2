@@ -155,7 +155,7 @@ class FridgeViewModel(
         val current = pendingProducts.value.toMutableList()
         if (index !in current.indices) return
         current[index] = current[index].copy(
-            name = name.trim(),
+            name = name,
             expiresAt = expiresAt,
             isExactDate = isExactDate
         )
