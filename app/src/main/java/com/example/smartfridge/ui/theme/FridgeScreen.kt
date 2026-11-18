@@ -22,6 +22,7 @@ import com.example.smartfridge.domain.getFreshness
 import com.example.smartfridge.domain.buildExpiringRecipes
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 
 private val Canvas = Color(0xFFF7F8F4)
@@ -432,6 +433,13 @@ private fun EmptyFridge(onAdd: () -> Unit) {
 }
 
 
+private fun isExpiryToday(expiresAt: Long): Boolean {
+    val today = Calendar.getInstance()
+    val expiry = Calendar.getInstance().apply { timeInMillis = expiresAt }
+    return today.get(Calendar.YEAR) == expiry.get(Calendar.YEAR) &&
+        today.get(Calendar.DAY_OF_YEAR) == expiry.get(Calendar.DAY_OF_YEAR)
+}
+
 @Composable
 private fun ExpiringRecipesPanel(
     padding: PaddingValues,
@@ -579,7 +587,7 @@ private fun ExpiringRecipesPanel(
                                             modifier = Modifier.weight(1f)
                                         )
                                         Text(
-                                            if (product.expiresAt - System.currentTimeMillis() < 86_400_000L) "сегодня" else "скоро",
+                                            if (isExpiryToday(product.expiresAt)) "сегодня" else "скоро",
                                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                                             fontSize = 10.sp
                                         )
