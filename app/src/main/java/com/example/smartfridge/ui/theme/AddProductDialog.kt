@@ -1,6 +1,7 @@
 package com.example.smartfridge.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,7 +55,7 @@ fun AddProductDialog(
         else suggestions.filter { it.name.contains(query, ignoreCase = true) }
     }
     val dateLabel = remember(expiryDate) {
-        SimpleDateFormat("dd MMMM yyyy", Locale("ru")).format(Date(expiryDate))
+        SimpleDateFormat("dd MMM yyyy", Locale("ru")).format(Date(expiryDate))
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -174,7 +175,13 @@ fun AddProductDialog(
                         shape = RoundedCornerShape(14.dp)
                     )
 
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().clickable { datePickerState.selectedDateMillis = expiryDate; showDatePicker = true }) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f),
+                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier.fillMaxWidth()
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .32f), RoundedCornerShape(15.dp))
+                            .clickable { datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate); showDatePicker = true }
+                    ) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("📅 Срок годности до:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
