@@ -18,6 +18,9 @@ interface FridgeDao {
     )
     fun observeAll(): Flow<List<FridgeItemEntity>>
 
+    @Query("SELECT * FROM fridge_items WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): FridgeItemEntity?
+
     @Insert
     suspend fun insert(
         item: FridgeItemEntity
