@@ -274,7 +274,7 @@ private fun FridgeHome(
                     BoxWithConstraints(
                         modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp))
                     ) {
-                        val frame = state.lastImage
+                        val frame = requireNotNull(state.lastImage)
                         Image(
                             bitmap = frame.asImageBitmap(),
                             contentDescription = "Предпросмотр камеры с рамками распознанных продуктов",
