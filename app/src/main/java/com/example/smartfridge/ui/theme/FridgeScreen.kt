@@ -754,7 +754,7 @@ private fun SettingsPanel(
                 OutlinedTextField(
                     value = intervalInput,
                     onValueChange = { value ->
-                        val digits = value.filter(Char::isDigit).take(4)
+                        val digits = value.filter { it.isDigit() }.take(4)
                         intervalInput = digits
                         digits.toIntOrNull()?.takeIf { it in 1..1440 }?.let(onCameraScanIntervalChange)
                     },
