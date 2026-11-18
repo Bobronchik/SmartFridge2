@@ -195,7 +195,15 @@ private fun FridgeHome(
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(26.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF2D8D6D), Color(0xFF67B58E))))
+                    .background(
+                        Brush.linearGradient(
+                            if (MaterialTheme.colorScheme.background == Color(0xFF121316)) {
+                                listOf(Color(0xFF282B32), Color(0xFF3A3E47))
+                            } else {
+                                listOf(Color(0xFF2D8D6D), Color(0xFF67B58E))
+                            }
+                        )
+                    )
                     .padding(20.dp)
             ) {
                 Column {
@@ -222,16 +230,16 @@ private fun FridgeHome(
                     value = expiringCount.toString(),
                     label = "Скоро истекает",
                     icon = "⏰",
-                    tint = Color(0xFFFFF2DB),
-                    valueColor = Color(0xFFB77A24)
+                    tint = MaterialTheme.colorScheme.tertiaryContainer,
+                    valueColor = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 SmallMetric(
                     modifier = Modifier.weight(1f),
                     value = expiredCount.toString(),
                     label = "Просрочено",
                     icon = "⚠️",
-                    tint = Color(0xFFFFE9E7),
-                    valueColor = Color(0xFFC45E55)
+                    tint = MaterialTheme.colorScheme.errorContainer,
+                    valueColor = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -365,14 +373,14 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
         }
         Freshness.EXPIRING_SOON -> {
             status = "Скоро испортится"
-            color = Color(0xFFB77A24)
-            background = Color(0xFFFFF2DB)
+            color = MaterialTheme.colorScheme.tertiary
+            background = MaterialTheme.colorScheme.tertiaryContainer
             progress = .35f
         }
         Freshness.EXPIRED -> {
             status = "Срок истёк"
-            color = Color(0xFFC45E55)
-            background = Color(0xFFFFE9E7)
+            color = MaterialTheme.colorScheme.error
+            background = MaterialTheme.colorScheme.errorContainer
             progress = .08f
         }
     }
@@ -731,7 +739,7 @@ private fun DebugPanel(
 private fun DebugRow(label: String, value: String, ok: Boolean) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) MaterialTheme.colorScheme.primary else Color(0xFFD89B42)))
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary))
             Spacer(Modifier.width(10.dp))
             Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
