@@ -189,6 +189,9 @@ private fun SmartFridgeContent(
     var cameraAddress by remember {
         mutableStateOf(preferences.getString("camera_address", "") ?: "")
     }
+    var cameraScanIntervalSeconds by remember {
+        mutableStateOf(preferences.getInt("camera_scan_interval_seconds", 2).coerceIn(1, 10))
+    }
 
     var showAddDialog by remember {
         mutableStateOf(false)
@@ -208,7 +211,7 @@ private fun SmartFridgeContent(
         onScan = {
             val address = cameraAddress.trim()
             if (address.isNotBlank()) {
-                viewModel.scan(address)
+                viewModel.scan(address, cameraScanIntervalSeconds)
             } else {
                 viewModel.setMessage("Укажи адрес камеры в настройках.")
             }
@@ -223,7 +226,10 @@ private fun SmartFridgeContent(
         cameraAddress = cameraAddress,
         onCameraAddressChange = { cameraAddress = it },
         onSaveSettings = {
-            preferences.edit().putString("camera_address", cameraAddress.trim()).apply()
+            preferences.edit()
+                .putString("camera_address", cameraAddress.trim())
+                .putInt("camera_scan_interval_seconds", cameraScanIntervalSeconds)
+                .apply()
             viewModel.setMessage("Настройки камеры сохранены")
         },
         onFindCamera = {
@@ -238,7 +244,13 @@ private fun SmartFridgeContent(
                     viewModel.setMessage("Камера не найдена. Проверь, что телефон и камера в одной сети.")
                 }
             }
-        }
+        },
+        onConfirmScan = viewModel::confirmScanReview,
+        onDismissScan = viewModel::dismissScanReview,
+        onUpdatePendingProduct = viewModel::updatePendingProduct,
+        onRemovePendingProduct = viewModel::removePendingProduct,
+        cameraScanIntervalSeconds = cameraScanIntervalSeconds,
+        onCameraScanIntervalChange = { cameraScanIntervalSeconds = it }
     )
 
     if (showAddDialog) {
