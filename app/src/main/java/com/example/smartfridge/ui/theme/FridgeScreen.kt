@@ -71,6 +71,7 @@ fun FridgeScreen(
     onRemovePendingProduct: (Int) -> Unit = {},
     cameraScanIntervalMinutes: Int = 1,
     onCameraScanIntervalChange: (Int) -> Unit = {},
+    onSaveCameraInterval: () -> Unit = {},
     shoppingItems: List<String> = emptyList(),
     onAddShoppingItem: (String) -> Unit = {},
     onRemoveShoppingItem: (String) -> Unit = {}
@@ -165,7 +166,8 @@ fun FridgeScreen(
                 onFindCamera = onFindCamera,
                 cameraSearching = state.cameraSearching,
                 cameraScanIntervalMinutes = cameraScanIntervalMinutes,
-                onCameraScanIntervalChange = onCameraScanIntervalChange
+                onCameraScanIntervalChange = onCameraScanIntervalChange,
+                onSaveInterval = onSaveCameraInterval
             )
             MainTab.DEBUG -> DebugPanel(
                 padding = scaffoldPadding,
@@ -894,7 +896,8 @@ private fun SettingsPanel(
     onFindCamera: () -> Unit,
     cameraSearching: Boolean,
     cameraScanIntervalMinutes: Int,
-    onCameraScanIntervalChange: (Int) -> Unit
+    onCameraScanIntervalChange: (Int) -> Unit,
+    onSaveInterval: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("ПЕРСОНАЛИЗАЦИЯ", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
@@ -963,7 +966,7 @@ private fun SettingsPanel(
                         Text("Интервал сохраняется отдельно от адреса камеры.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     }
                     Button(
-                        onClick = onSave,
+                        onClick = onSaveInterval,
                         enabled = intervalInput.toIntOrNull()?.let { it in 1..1440 } == true,
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Сохранить") }
