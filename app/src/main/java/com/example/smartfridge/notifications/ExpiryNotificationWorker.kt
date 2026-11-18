@@ -21,14 +21,24 @@ class ExpiryNotificationWorker(
             createNotificationChannel()
 
             val now = System.currentTimeMillis()
-            val limit = Calendar.getInstance().apply {
+            val startOfToday = Calendar.getInstance().apply {
                 timeInMillis = now
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val limit = (startOfToday.clone() as Calendar).apply {
                 add(Calendar.DAY_OF_YEAR, 2)
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 999)
             }.timeInMillis
 
             val products = AppDatabase.getInstance(applicationContext)
                 .fridgeDao()
-                .getExpiringBetween(now, limit)
+                .getExpiringBetween(startOfToday.timeInMillis, limit)
 
             val manager = NotificationManagerCompat.from(applicationContext)
             products.forEach { product ->
