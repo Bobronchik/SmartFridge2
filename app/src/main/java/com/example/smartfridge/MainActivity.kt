@@ -141,6 +141,7 @@ private fun SmartFridgeContent(
 ) {
 
     val state by viewModel.uiState.collectAsState()
+    val suggestions by viewModel.productSuggestions.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -161,38 +162,6 @@ private fun SmartFridgeContent(
         mutableStateOf(false)
     }
 
-    if (!connected) {
-
-        CameraSetupScreen(
-            connected = false,
-            searching = searching,
-
-            onSearch = {
-                searching = true
-
-                scope.launch {
-                    try {
-                        val ip = discoverCamera(context)
-
-                        if (ip != null) {
-                            cameraAddress = ip
-                            connected = true
-                            viewModel.setCameraConnected(true)
-                        }
-                    } finally {
-                        searching = false
-                    }
-                }
-            },
-
-            onDone = {
-                connected = true
-            }
-        )
-
-        return
-    }
-
     FridgeScreen(
         state = state,
 
@@ -206,20 +175,22 @@ private fun SmartFridgeContent(
 
         onScan = {
             val address = cameraAddress
-
             if (address != null) {
                 viewModel.scan(address)
+            } else {
+                viewModel.setMessage("Камера не подключена. Добавляй продукты вручную или настрой камеру позже.")
             }
         },
 
         onAdd = {
             showAddDialog = true
         }
+        onDelete = viewModel::deleteProduct
     )
 
     if (showAddDialog) {
         AddProductDialog(
-            suggestions = emptyList(),
+            suggestions = suggestions,
 
             onSearch = {
                 viewModel.searchCatalog(it)
