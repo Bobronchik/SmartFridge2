@@ -196,6 +196,18 @@ class FridgeViewModel(
         }
     }
 
+    fun updateProduct(product: FridgeProduct) {
+        viewModelScope.launch {
+            try {
+                repository.updateProduct(product)
+                message.value = "${product.name} обновлён"
+            } catch (e: Exception) {
+                android.util.Log.e("FridgeViewModel", "Updating product failed", e)
+                message.value = e.message ?: "Не удалось обновить продукт"
+            }
+        }
+    }
+
     fun deleteProduct(product: FridgeProduct) {
         viewModelScope.launch {
             try {
