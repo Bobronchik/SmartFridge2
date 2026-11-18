@@ -595,8 +595,14 @@ private fun ProductCard(
     }
     val expiry = SimpleDateFormat("dd MMM yyyy", Locale("ru")).format(Date(product.expiresAt))
     val added = SimpleDateFormat("dd MMM, HH:mm", Locale("ru")).format(Date(product.addedAt))
+    val progressColor = when (freshness) {
+        Freshness.FRESH -> Color(0xFF62B889)
+        Freshness.EXPIRING_SOON -> Color(0xFFE0B35C)
+        Freshness.EXPIRED -> Color(0xFFD87568)
+    }
+    val visibleProgress = if (freshness == Freshness.EXPIRED) .08f else progress
     val animatedProgress by animateFloatAsState(
-        targetValue = progress,
+        targetValue = visibleProgress,
         animationSpec = tween(durationMillis = 650),
         label = "freshness-progress"
     )
@@ -634,15 +640,12 @@ private fun ProductCard(
                 Spacer(Modifier.height(3.dp))
                 Text("Годен до: $expiry", color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(8.dp))
-                Box(
-                    Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
-                        .background(Brush.horizontalGradient(listOf(Color(0xFF62B889), Color(0xFFE0B35C), Color(0xFFD87568))))
-                ) {
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
                     Box(
-                        Modifier.align(Alignment.CenterEnd)
-                            .fillMaxWidth(1f - animatedProgress)
+                        Modifier.fillMaxWidth(animatedProgress)
                             .fillMaxHeight()
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clip(CircleShape)
+                            .background(progressColor)
                     )
                 }
                 Spacer(Modifier.height(5.dp))
