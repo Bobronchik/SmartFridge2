@@ -21,7 +21,7 @@ object ExpiryDateParser {
     )
 
     private val explicitIsoExpiryPattern = Regex(
-        """(?:срок\s*годности|годен|годна|годно|употребить|употреблять|exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})""",
+        """(?:срок\s*годности|годен|годна|годно|употребить|употреблять|exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*(?:до)?\s*:?\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})""",
         RegexOption.IGNORE_CASE
     )
     private val genericDatePattern = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""")
