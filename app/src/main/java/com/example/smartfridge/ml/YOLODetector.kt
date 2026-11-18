@@ -237,8 +237,10 @@ class YOLODetector(context: Context) {
                 maxConfidence = bestScore
             }
 
-            if (bestScore < CONFIDENCE_THRESHOLD) continue
+            if (!bestScore.isFinite() || bestScore < CONFIDENCE_THRESHOLD) continue
             if (bestClass !in labels.indices) continue
+            if (!centerX.isFinite() || !centerY.isFinite() || !width.isFinite() || !height.isFinite()) continue
+            if (width <= 0f || height <= 0f) continue
 
             val coordinateScale = if (
                 maxOf(
@@ -271,6 +273,7 @@ class YOLODetector(context: Context) {
             val bottom = ((y2 - padTop) / scale)
                 .coerceIn(0f, bitmap.height.toFloat())
 
+            if (!left.isFinite() || !top.isFinite() || !right.isFinite() || !bottom.isFinite()) continue
             if (right <= left || bottom <= top) continue
 
             candidates.add(
