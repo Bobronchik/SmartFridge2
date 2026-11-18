@@ -39,6 +39,9 @@ class FridgeVisionPipeline(
                 return@withContext emptyList()
             }
 
+            // Read the catalog once per frame instead of issuing a Room Flow query
+            // for every detected object.
+            val catalog = productDao.observeAll().first()
             val results = mutableListOf<RecognizedProduct>()
             for (detection in detections) {
                 // YOLO predicts a broad category, not necessarily an exact catalog product.
@@ -65,7 +68,7 @@ class FridgeVisionPipeline(
                 }
 
                 val expiry = ExpiryDateParser.findExpiryDate(ocrText)
-                val product = findCatalogProduct(detection.label, ocrText)
+                val product = findCatalogProduct(detection.label, ocrText, catalog)
                     ?: createFallbackProduct(detection.label)
                 val finalExpiry = expiry
                     ?: calculateEstimatedExpiry(product.defaultShelfLifeDays)
@@ -85,15 +88,15 @@ class FridgeVisionPipeline(
             results
         }
 
-    private suspend fun findCatalogProduct(
+    private fun findCatalogProduct(
         yoloLabel: String,
-        ocrText: String
+        ocrText: String,
+        catalog: List<ProductCatalogEntity>
     ): ProductCatalogEntity? {
         val normalizedText = normalize(ocrText)
         if (normalizedText.length >= 4) {
             val normalizedLabel = normalize(yoloLabel)
-            val candidates = productDao.observeAll().first()
-                .filter { product ->
+            val candidates = catalog.filter { product ->
                     val normalizedName = normalize(product.name)
                     normalizedName.length >= 4 && normalizedText.contains(normalizedName)
                 }
@@ -157,7 +160,14 @@ class FridgeVisionPipeline(
         val right = (detection.right + padX).toInt().coerceIn(left + 1, bitmap.width)
         val bottom = (detection.bottom + padY).toInt().coerceIn(top + 1, bitmap.height)
 
-        return Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        val crop = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        // Android may return the source bitmap when the crop covers the full frame.
+        // The caller owns and recycles this crop, never the camera's original bitmap.
+        return if (crop === bitmap) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            crop
+        }
     }
 
     fun close() {
