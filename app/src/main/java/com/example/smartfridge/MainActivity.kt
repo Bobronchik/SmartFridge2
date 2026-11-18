@@ -238,15 +238,20 @@ private fun SmartFridgeContent(
             viewModel.setMessage("Настройки камеры сохранены")
         },
         onFindCamera = {
-            scope.launch {
-                viewModel.setMessage("Ищем камеру в локальной сети…")
-                val found = withContext(Dispatchers.IO) { discoverCamera(context) }
-                if (found != null) {
-                    cameraAddress = found
-                    preferences.edit().putString("camera_address", found).apply()
-                    viewModel.setMessage("Камера найдена: $found")
-                } else {
-                    viewModel.setMessage("Камера не найдена. Проверь, что телефон и камера в одной сети.")
+            if (!state.cameraSearching) scope.launch {
+                viewModel.setCameraSearching(true)
+                try {
+                    viewModel.setMessage("Ищем камеру в локальной сети…")
+                    val found = withContext(Dispatchers.IO) { discoverCamera(context) }
+                    if (found != null) {
+                        cameraAddress = found
+                        preferences.edit().putString("camera_address", found).apply()
+                        viewModel.setMessage("Камера найдена: $found")
+                    } else {
+                        viewModel.setMessage("Камера не найдена. Проверь, что телефон и камера в одной сети.")
+                    }
+                } finally {
+                    viewModel.setCameraSearching(false)
                 }
             }
         },
