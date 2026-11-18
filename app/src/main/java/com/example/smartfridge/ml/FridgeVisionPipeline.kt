@@ -46,7 +46,7 @@ class FridgeVisionPipeline(
             Log.d(TAG, "Frame ${bitmap.width}x${bitmap.height}: ${detections.size} YOLO detections")
 
             if (detections.isEmpty()) {
-                return@withContext emptyList()
+                return@withLock emptyList()
             }
 
             // Read the catalog once per frame instead of issuing a Room Flow query
@@ -104,7 +104,7 @@ class FridgeVisionPipeline(
             }
         }
 
-    private fun findCatalogProduct(
+    private suspend fun findCatalogProduct(
         yoloLabel: String,
         ocrText: String,
         catalog: List<ProductCatalogEntity>
