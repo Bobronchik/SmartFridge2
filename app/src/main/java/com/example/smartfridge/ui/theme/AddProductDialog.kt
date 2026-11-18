@@ -26,6 +26,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +48,7 @@ fun AddProductDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
 
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = expiryDate)
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = toDatePickerMillis(expiryDate))
     val filtered = remember(suggestions, query) {
         if (query.isBlank()) suggestions
         else suggestions.filter { it.name.contains(query, ignoreCase = true) }
@@ -110,7 +111,7 @@ fun AddProductDialog(
                                             expiryDate = Calendar.getInstance().apply {
                                                 add(Calendar.DAY_OF_YEAR, product.defaultShelfLifeDays.coerceAtLeast(1))
                                             }.timeInMillis
-                                            datePickerState.selectedDateMillis = expiryDate
+                                            datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate)
                                             exact = false
                                         }
                                         .padding(horizontal = 13.dp, vertical = 10.dp),
@@ -222,7 +223,7 @@ fun AddProductDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let {
-                        expiryDate = it
+                        expiryDate = fromDatePickerMillis(it)
                         exact = true
                     }
                     showDatePicker = false
@@ -244,3 +245,20 @@ private fun endOfSelectedDay(value: Long): Long = Calendar.getInstance().apply {
     timeInMillis = value
     set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
 }.timeInMillis
+
+private fun toDatePickerMillis(localDateMillis: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = localDateMillis }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
+    }.timeInMillis
+}
+
+private fun fromDatePickerMillis(utcDateMillis: Long): Long {
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcDateMillis }
+    return Calendar.getInstance().apply {
+        clear()
+        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), 23, 59, 59)
+        set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+}
