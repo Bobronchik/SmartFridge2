@@ -221,7 +221,10 @@ fun AddProductDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { expiryDate = it }
+                    datePickerState.selectedDateMillis?.let {
+                        expiryDate = it
+                        exact = true
+                    }
                     showDatePicker = false
                 }) { Text("Выбрать") }
             },
