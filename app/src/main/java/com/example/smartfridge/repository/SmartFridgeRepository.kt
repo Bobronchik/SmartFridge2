@@ -97,5 +97,5 @@ class SmartFridgeRepository(
         fridgeDao.delete(entity)
     }
 
-    fun close() = pipeline.close()
+    suspend fun close() = pipeline.release()
 }
