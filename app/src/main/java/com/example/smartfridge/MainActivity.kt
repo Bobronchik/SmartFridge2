@@ -283,16 +283,17 @@ private fun SmartFridgeContent(
                     expiresAt,
                     exact ->
 
-                viewModel.addProduct(
-                    name,
-                    category,
-                    icon,
-                    quantity,
-                    expiresAt,
-                    exact
-                )
-
-                showAddDialog = false
+                scope.launch {
+                    val saved = viewModel.addProduct(
+                        name,
+                        category,
+                        icon,
+                        quantity,
+                        expiresAt,
+                        exact
+                    )
+                    if (saved) showAddDialog = false
+                }
             }
         )
     }
