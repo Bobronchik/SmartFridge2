@@ -225,6 +225,7 @@ private fun SmartFridgeContent(
             showAddDialog = true
         },
         onDelete = viewModel::deleteProduct,
+        onUpdateProduct = viewModel::updateProduct,
         darkTheme = darkTheme,
         onThemeChange = onThemeChange,
         cameraAddress = cameraAddress,
