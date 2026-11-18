@@ -75,7 +75,7 @@ object CTCDecoder {
                 val isProbabilityRow =
                     minVal >= 0f &&
                     maxVal <= 1f &&
-                    abs(rowSum - 1.0) <= PROBABILITY_SUM_TOLERANCE
+                    abs(rowSum - 1.0) <= PROBABILITY_SUM_TOLERANCE.toDouble()
 
                 val confidence = if (isProbabilityRow) {
                     maxVal
