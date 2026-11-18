@@ -261,37 +261,29 @@ fun buildExpiringRecipes(
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
-    }
-    val limit = (startOfToday.clone() as Calendar).apply {
-        add(Calendar.DAY_OF_YEAR, 2)
-        set(Calendar.HOUR_OF_DAY, 23)
-        set(Calendar.MINUTE, 59)
-        set(Calendar.SECOND, 59)
-        set(Calendar.MILLISECOND, 999)
     }.timeInMillis
 
-    val expiring = products.filter {
-        it.expiresAt >= startOfToday.timeInMillis && it.expiresAt <= limit
-    }.sortedBy { it.expiresAt }
+    // The UI passes only user-selected fridge items. Do not silently restrict
+    // suggestions to products expiring in the next 48 hours.
+    val available = products
+        .filter { it.expiresAt >= startOfToday }
+        .distinctBy { it.id }
+        .sortedBy { it.expiresAt }
 
-    if (expiring.isEmpty()) return emptyList()
+    if (available.isEmpty()) return emptyList()
 
     val ranked = recipeCatalog.mapNotNull { recipe ->
-        val matched = expiring.filter { product ->
+        val matched = available.filter { product ->
             val normalizedName = product.name.lowercase()
             recipe.aliases.any { alias -> normalizedName.contains(alias) }
         }
-        if (matched.isEmpty()) {
-            null
-        } else {
-            recipe to matched
-        }
+        if (matched.isEmpty()) null else recipe to matched
     }.sortedWith(
         compareByDescending<Pair<RecipeDefinition, List<FridgeProduct>>> { it.second.size }
             .thenBy { it.second.minOf(FridgeProduct::expiresAt) }
     )
 
-    return ranked.take(3).map { (recipe, matched) ->
+    return ranked.take(6).map { (recipe, matched) ->
         ExpiringRecipeSuggestion(
             title = recipe.title,
             description = recipe.description,
