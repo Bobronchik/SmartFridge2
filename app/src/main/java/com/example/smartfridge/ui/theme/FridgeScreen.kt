@@ -1,6 +1,8 @@
 package com.example.smartfridge.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.Image
@@ -71,6 +73,7 @@ fun FridgeScreen(
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
     var productToEdit by remember { mutableStateOf<FridgeProduct?>(null) }
+    var statusFilter by remember { mutableStateOf<Freshness?>(null) }
 
     val expiringCount = state.allProducts.count {
         getFreshness(it.expiresAt) == Freshness.EXPIRING_SOON
@@ -81,45 +84,45 @@ fun FridgeScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onScan,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(62.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("📷", fontSize = 18.sp)
-                    Text("Скан", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Center,
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary,
-                tonalElevation = 8.dp
+                tonalElevation = 10.dp
             ) {
-                MainTab.entries.forEach { tab ->
+                MainTab.entries.take(2).forEach { tab ->
                     NavigationBarItem(
+                        modifier = Modifier.weight(1f),
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
-                        icon = {
-                            Text(tab.icon, fontSize = if (selectedTab == tab) 21.sp else 19.sp)
-                        },
-                        label = {
-                            Text(tab.title, fontSize = 10.sp, maxLines = 1)
-                        },
-                        alwaysShowLabel = true,
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        icon = { Text(tab.icon, fontSize = if (selectedTab == tab) 21.sp else 19.sp) },
+                        label = { Text(tab.title, fontSize = 9.sp, maxLines = 1) },
+                        alwaysShowLabel = true
+                    )
+                }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    FloatingActionButton(
+                        onClick = onScan,
+                        modifier = Modifier.size(54.dp),
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 5.dp, pressedElevation = 8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("📷", fontSize = 17.sp)
+                            Text("Скан", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                MainTab.entries.drop(2).forEach { tab ->
+                    NavigationBarItem(
+                        modifier = Modifier.weight(1f),
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
+                        icon = { Text(tab.icon, fontSize = if (selectedTab == tab) 21.sp else 19.sp) },
+                        label = { Text(tab.title, fontSize = 9.sp, maxLines = 1) },
+                        alwaysShowLabel = true
                     )
                 }
             }
@@ -135,7 +138,10 @@ fun FridgeScreen(
                 onCategory = onCategory,
                 onAdd = onAdd,
                 onDelete = { productToDelete = it },
-                onEdit = { productToEdit = it }
+                onEdit = { productToEdit = it },
+                onUpdateProduct = onUpdateProduct,
+                statusFilter = statusFilter,
+                onStatusFilterChange = { statusFilter = it }
             )
             MainTab.RECIPES -> ExpiringRecipesPanel(
                 padding = scaffoldPadding,
@@ -212,9 +218,15 @@ private fun FridgeHome(
     onCategory: (String?) -> Unit,
     onAdd: () -> Unit,
     onDelete: (FridgeProduct) -> Unit,
-    onEdit: (FridgeProduct) -> Unit
+    onEdit: (FridgeProduct) -> Unit,
+    onUpdateProduct: (FridgeProduct) -> Unit,
+    statusFilter: Freshness?,
+    onStatusFilterChange: (Freshness?) -> Unit
 ) {
-    val visibleCategories = state.products
+    val visibleProducts = remember(state.products, statusFilter) {
+        state.products.filter { statusFilter == null || getFreshness(it.expiresAt) == statusFilter }
+    }
+    val visibleCategories = visibleProducts
         .map { it.category }
         .distinct()
         .sorted()
@@ -260,7 +272,7 @@ private fun FridgeHome(
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(state.allProducts.size.toString(), color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(8.dp))
-                        Text("продуктов", color = Color.White.copy(alpha = .9f), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        Text(productWord(state.allProducts.size), color = Color.White.copy(alpha = .9f), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -279,7 +291,9 @@ private fun FridgeHome(
                     label = "Скоро истекает",
                     icon = "⏰",
                     tint = MaterialTheme.colorScheme.tertiaryContainer,
-                    valueColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    valueColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    selected = statusFilter == Freshness.EXPIRING_SOON,
+                    onClick = { onStatusFilterChange(if (statusFilter == Freshness.EXPIRING_SOON) null else Freshness.EXPIRING_SOON) }
                 )
                 SmallMetric(
                     modifier = Modifier.weight(1f),
@@ -287,7 +301,9 @@ private fun FridgeHome(
                     label = "Просрочено",
                     icon = "⚠️",
                     tint = MaterialTheme.colorScheme.errorContainer,
-                    valueColor = MaterialTheme.colorScheme.error
+                    valueColor = MaterialTheme.colorScheme.error,
+                    selected = statusFilter == Freshness.EXPIRED,
+                    onClick = { onStatusFilterChange(if (statusFilter == Freshness.EXPIRED) null else Freshness.EXPIRED) }
                 )
             }
         }
@@ -395,13 +411,22 @@ private fun FridgeHome(
             }
         }
 
-        if (state.products.isEmpty()) {
+        if (visibleProducts.isEmpty()) {
             item {
-                EmptyFridge(onAdd)
+                if (statusFilter == null) EmptyFridge(onAdd)
+                else EmptyFilterState(
+                    title = if (statusFilter == Freshness.EXPIRED) "Просроченных продуктов нет" else "Всё пока свежее",
+                    onClear = { onStatusFilterChange(null) }
+                )
             }
         } else {
-            items(state.products, key = { it.id }) { product ->
-                ProductCard(product = product, onDelete = { onDelete(product) }, onEdit = { onEdit(product) })
+            items(visibleProducts, key = { it.id }) { product ->
+                ProductCard(
+                    product = product,
+                    onDelete = { onDelete(product) },
+                    onEdit = { onEdit(product) },
+                    onQuantityChange = { next -> onUpdateProduct(product.copy(quantity = next.coerceAtLeast(0.1f))) }
+                )
             }
         }
 
@@ -431,6 +456,24 @@ private fun StatPill(icon: String, text: String, background: Color) {
     }
 }
 
+private fun EmptyFilterState(title: String, onClear: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("✨", fontSize = 30.sp)
+            Spacer(Modifier.height(8.dp))
+            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+            TextButton(onClick = onClear) { Text("Сбросить фильтр") }
+        }
+    }
+}
+
+private fun productWord(count: Int): String = when {
+    count % 100 in 11..14 -> "продуктов"
+    count % 10 == 1 -> "продукт"
+    count % 10 in 2..4 -> "продукта"
+    else -> "продуктов"
+}
+
 @Composable
 private fun SmallMetric(
     modifier: Modifier,
@@ -438,9 +481,19 @@ private fun SmallMetric(
     label: String,
     icon: String,
     tint: Color,
-    valueColor: Color
+    valueColor: Color,
+    selected: Boolean = false,
+    onClick: () -> Unit = {}
 ) {
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick).border(
+            width = if (selected) 1.dp else 0.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+            shape = RoundedCornerShape(20.dp)
+        ),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f) else MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(20.dp)
+    ) {
         Column(Modifier.padding(15.dp)) {
             Box(Modifier.size(32.dp).clip(RoundedCornerShape(11.dp)).background(tint), contentAlignment = Alignment.Center) {
                 Text(icon, fontSize = 15.sp)
@@ -453,7 +506,13 @@ private fun SmallMetric(
 }
 
 @Composable
-private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: () -> Unit) {
+private fun ProductCard(
+    product: FridgeProduct,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onQuantityChange: (Float) -> Unit
+) {
+    var horizontalDrag by remember(product.id) { mutableFloatStateOf(0f) }
     val freshness = getFreshness(product.expiresAt)
     val status: String
     val color: Color
@@ -464,24 +523,44 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: ()
             status = "Свежий продукт"
             color = MaterialTheme.colorScheme.primary
             background = MaterialTheme.colorScheme.surfaceVariant
-            progress = .82f
+            progress = freshnessProgress(product)
         }
         Freshness.EXPIRING_SOON -> {
             status = "Скоро испортится"
             color = MaterialTheme.colorScheme.tertiary
             background = MaterialTheme.colorScheme.tertiaryContainer
-            progress = .35f
+            progress = freshnessProgress(product)
         }
         Freshness.EXPIRED -> {
             status = "Срок истёк"
             color = MaterialTheme.colorScheme.error
             background = MaterialTheme.colorScheme.errorContainer
-            progress = .08f
+            progress = freshnessProgress(product)
         }
     }
-    val expiry = SimpleDateFormat("dd MMM", Locale("ru")).format(Date(product.expiresAt))
+    val expiry = SimpleDateFormat("dd MMM yyyy", Locale("ru")).format(Date(product.expiresAt))
+    val added = SimpleDateFormat("dd MMM, HH:mm", Locale("ru")).format(Date(product.addedAt))
 
-    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth().pointerInput(product.id) {
+            detectHorizontalDragGestures(
+                onHorizontalDrag = { change, amount ->
+                    change.consume()
+                    horizontalDrag += amount
+                },
+                onDragEnd = {
+                    when {
+                        horizontalDrag < -72f -> onDelete()
+                        horizontalDrag > 72f -> onEdit()
+                    }
+                    horizontalDrag = 0f
+                },
+                onDragCancel = { horizontalDrag = 0f }
+            )
+        }
+    ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
@@ -491,14 +570,14 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: ()
             Column(modifier = Modifier.weight(1f)) {
                 Text(product.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text("${product.quantity} шт. · ${product.category}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                Text("Добавлено: " + SimpleDateFormat("dd MMM, HH:mm", Locale("ru")).format(Date(product.addedAt)), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                Spacer(Modifier.height(9.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f).height(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape).background(color))
-                    }
-                    Spacer(Modifier.width(9.dp))
-                    Text(expiry, color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Text("Добавлен: $added", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                Spacer(Modifier.height(3.dp))
+                Text("Годен до: $expiry", color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape).background(
+                        Brush.horizontalGradient(listOf(Color(0xFF62B889), Color(0xFFE0B35C), Color(0xFFD87568)))
+                    ))
                 }
                 Spacer(Modifier.height(5.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -510,11 +589,28 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: ()
                     }
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = {
+                        val step = if (product.quantity >= 1f && product.quantity % 1f == 0f) 1f else .1f
+                        onQuantityChange((product.quantity - step).coerceAtLeast(.1f))
+                    }, modifier = Modifier.size(30.dp)) { Text("−", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface) }
+                    Text(
+                        if (product.quantity % 1f == 0f) product.quantity.toInt().toString()
+                        else String.format(Locale.getDefault(), "%.1f", product.quantity),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = {
+                        val step = if (product.quantity >= 1f && product.quantity % 1f == 0f) 1f else .1f
+                        onQuantityChange(product.quantity + step)
+                    }, modifier = Modifier.size(30.dp)) { Text("+", fontSize = 17.sp, color = MaterialTheme.colorScheme.primary) }
+                }
+                TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
                     Text("Изменить", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp)
                 }
-                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+                TextButton(onClick = onDelete, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
                     Text("Удалить", color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
                 }
             }
@@ -541,6 +637,11 @@ private fun EmptyFridge(onAdd: () -> Unit) {
     }
 }
 
+
+private fun freshnessProgress(product: FridgeProduct, now: Long = System.currentTimeMillis()): Float {
+    val total = (product.expiresAt - product.addedAt).coerceAtLeast(1L)
+    return ((product.expiresAt - now).toFloat() / total.toFloat()).coerceIn(0f, 1f)
+}
 
 private fun isExpiryToday(expiresAt: Long): Boolean {
     val today = Calendar.getInstance()
@@ -584,6 +685,14 @@ private fun ExpiringRecipesPanel(
                     Text("ТВОИ ПРОДУКТЫ", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.2.sp)
                     Spacer(Modifier.weight(1f))
                     Text("Сначала ближайшие сроки", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                }
+                val expiringIds = sortedProducts.filter { getFreshness(it.expiresAt) == Freshness.EXPIRING_SOON }.map { it.id }
+                if (expiringIds.isNotEmpty()) {
+                    TextButton(onClick = {
+                        selectedIds.clear()
+                        selectedIds.addAll(expiringIds)
+                        showResults = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Выбрать всё, что скоро испортится") }
                 }
             }
             items(sortedProducts, key = { it.id }) { product ->
@@ -652,7 +761,10 @@ private fun ExpiringRecipesPanel(
                                 }
                                 Text("${recipe.durationMinutes} мин", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
-                            Text("Используем: " + recipe.matchedProducts.joinToString { it.name }, color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            val matchCount = recipe.matchedProducts.size.coerceAtMost(recipe.ingredients.size)
+                            val matchPercent = matchCount * 100 / recipe.ingredients.size.coerceAtLeast(1)
+                            Text("Совпадение ~$matchPercent% · есть $matchCount из ${recipe.ingredients.size} ингредиентов", color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Используем: " + recipe.matchedProducts.joinToString { it.name }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             Text("Ингредиенты: " + recipe.ingredients.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             recipe.instructions.forEachIndexed { index, instruction ->
@@ -767,8 +879,17 @@ private fun SettingsPanel(
                     isError = intervalInput.toIntOrNull()?.let { it !in 1..1440 } ?: true,
                     shape = RoundedCornerShape(14.dp)
                 )
-                Text("Сейчас: $cameraScanIntervalMinutes мин.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text("Нажми «Сохранить» в блоке камеры, чтобы применить настройку.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Сейчас: $cameraScanIntervalMinutes мин.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Интервал сохраняется отдельно от адреса камеры.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                    }
+                    Button(
+                        onClick = onSave,
+                        enabled = intervalInput.toIntOrNull()?.let { it in 1..1440 } == true,
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Сохранить") }
+                }
             }
         }
     }
