@@ -13,14 +13,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF83D6B1),
-    secondary = Color(0xFFB2DCC6),
-    tertiary = Color(0xFFE5B96C),
-    background = Color(0xFF101A16),
-    surface = Color(0xFF18231E),
-    onPrimary = Color(0xFF10251B),
-    onBackground = Color(0xFFE7F0EA),
-    onSurface = Color(0xFFE7F0EA)
+    primary = Color(0xFF8E95A5),
+    onPrimary = Color(0xFF17191D),
+    primaryContainer = Color(0xFF343943),
+    onPrimaryContainer = Color(0xFFE4E6EB),
+    secondary = Color(0xFF6C7382),
+    onSecondary = Color(0xFFF0F1F4),
+    secondaryContainer = Color(0xFF30343C),
+    onSecondaryContainer = Color(0xFFD5D8E0),
+    tertiary = Color(0xFFC18A52),
+    onTertiary = Color(0xFF24180E),
+    tertiaryContainer = Color(0xFF493323),
+    onTertiaryContainer = Color(0xFFFFE2C5),
+    background = Color(0xFF121316),
+    onBackground = Color(0xFFE4E6EB),
+    surface = Color(0xFF1E2025),
+    onSurface = Color(0xFFE4E6EB),
+    surfaceVariant = Color(0xFF282B32),
+    onSurfaceVariant = Color(0xFFA0A5B1),
+    outline = Color(0xFF626875),
+    outlineVariant = Color(0xFF3A3E47),
+    error = Color(0xFFD58B82),
+    onError = Color(0xFF2A1110)
 )
 
 private val LightColorScheme = lightColorScheme(
