@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         OpenCVLoader.initLocal()
+        ExpiryNotificationScheduler.createNotificationChannel(applicationContext)
         ExpiryNotificationScheduler.schedule(applicationContext)
 
         val notificationPermissionLauncher = registerForActivityResult(
