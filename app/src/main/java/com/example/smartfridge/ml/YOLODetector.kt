@@ -173,7 +173,11 @@ class YOLODetector(context: Context) {
 
         input.rewind()
 
-        val outputShape = model.getOutputTensor(0).shape()
+        val outputTensor = model.getOutputTensor(0)
+        require(outputTensor.dataType() == DataType.FLOAT32) {
+            "Модель YOLO должна иметь FLOAT32 выход: ${outputTensor.dataType()}"
+        }
+        val outputShape = outputTensor.shape()
 
         require(outputShape.size == 3 && outputShape[0] == 1) {
             "Неподдерживаемый выход YOLO: ${outputShape.contentToString()}"
@@ -187,24 +191,18 @@ class YOLODetector(context: Context) {
 
         model.run(input, output)
 
-        val channelFirst = outputShape[1] < outputShape[2]
-
-        val channels = if (channelFirst) {
-            outputShape[1]
-        } else {
-            outputShape[2]
+        // Detect the output layout from the known class-channel count, not by
+        // assuming that the smaller output dimension is always the channel axis.
+        val expectedChannels = labels.size + 4
+        val channelFirst = outputShape[1] == expectedChannels
+        val channelLast = outputShape[2] == expectedChannels
+        require(channelFirst.xor(channelLast)) {
+            "Не удалось определить формат выхода YOLO. Ожидалось $expectedChannels " +
+                    "каналов, форма: ${outputShape.contentToString()}"
         }
 
-        val predictions = if (channelFirst) {
-            outputShape[2]
-        } else {
-            outputShape[1]
-        }
-
-        require(channels == labels.size + 4) {
-            "Ожидалось ${labels.size + 4} каналов, получено $channels. " +
-                    "Форма: ${outputShape.contentToString()}"
-        }
+        val channels = expectedChannels
+        val predictions = if (channelFirst) outputShape[2] else outputShape[1]
 
         fun value(channel: Int, index: Int): Float {
             return if (channelFirst) {
@@ -239,8 +237,10 @@ class YOLODetector(context: Context) {
                 maxConfidence = bestScore
             }
 
-            if (bestScore < CONFIDENCE_THRESHOLD) continue
+            if (!bestScore.isFinite() || bestScore < CONFIDENCE_THRESHOLD) continue
             if (bestClass !in labels.indices) continue
+            if (!centerX.isFinite() || !centerY.isFinite() || !width.isFinite() || !height.isFinite()) continue
+            if (width <= 0f || height <= 0f) continue
 
             val coordinateScale = if (
                 maxOf(
@@ -273,6 +273,7 @@ class YOLODetector(context: Context) {
             val bottom = ((y2 - padTop) / scale)
                 .coerceIn(0f, bitmap.height.toFloat())
 
+            if (!left.isFinite() || !top.isFinite() || !right.isFinite() || !bottom.isFinite()) continue
             if (right <= left || bottom <= top) continue
 
             candidates.add(

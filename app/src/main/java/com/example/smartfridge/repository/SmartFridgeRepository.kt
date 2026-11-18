@@ -9,9 +9,9 @@ import com.example.smartfridge.data.ProductDao
 import com.example.smartfridge.domain.FridgeProduct
 import com.example.smartfridge.domain.toDomain
 import com.example.smartfridge.ml.FridgeVisionPipeline
+import com.example.smartfridge.ml.RecognizedProduct
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.util.Calendar
 
 class SmartFridgeRepository(
     private val fridgeDao: FridgeDao,
@@ -19,79 +19,36 @@ class SmartFridgeRepository(
     private val pipeline: FridgeVisionPipeline,
     private val cameraRepository: CameraRepository
 ) {
+    val productCatalog: Flow<List<ProductCatalogEntity>> = productDao.observeAll()
 
-    val products: Flow<List<FridgeProduct>> =
-        fridgeDao
-            .observeAll()
-            .map { items ->
-                items.map {
-                    it.toDomain()
-                }
-            }
-
-    suspend fun capture(
-        address: String
-    ): Bitmap? {
-
-        return cameraRepository
-            .capture(address)
-            .bitmap
+    val products: Flow<List<FridgeProduct>> = fridgeDao.observeAll().map { items ->
+        items.map { it.toDomain() }
     }
 
-    suspend fun analyze(
-        bitmap: Bitmap
-    ) {
+    suspend fun capture(address: String): Bitmap? = cameraRepository.capture(address).bitmap
 
-        val recognized =
-            pipeline.analyze(bitmap)
+    // Recognition is deliberately read-only. The caller must ask the user to review
+    // the result and call saveRecognizedProducts only after explicit confirmation.
+    suspend fun analyze(bitmap: Bitmap): List<RecognizedProduct> = pipeline.analyze(bitmap)
 
-        val now =
-            System.currentTimeMillis()
-
-        val entities =
-            recognized.map { product ->
-
-                FridgeItemEntity(
-
-                    productId =
-                        productDao
-                            .findByName(
-                                product.name
-                            )
-                            ?.id,
-
-                    name =
-                        product.name,
-
-                    category =
-                        product.category,
-
-                    icon =
-                        product.icon,
-
-                    quantity =
-                        product.quantity,
-
-                    addedAt =
-                        now,
-
-                    expiresAt =
-                        product.expiresAt,
-
-                    isExactDate =
-                        product.isExactDate,
-
-                    brand =
-                        product.brand
-                )
-            }
-
-        if (entities.isNotEmpty()) {
-
-            fridgeDao.insertAll(
-                entities
+    suspend fun saveRecognizedProducts(products: List<RecognizedProduct>) {
+        if (products.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val entities = products.map { product ->
+            val catalogItem = productDao.findByName(product.name)
+            FridgeItemEntity(
+                productId = catalogItem?.id,
+                name = product.name.trim(),
+                category = product.category,
+                icon = product.icon,
+                quantity = product.quantity.coerceAtLeast(0.01f),
+                addedAt = now,
+                expiresAt = product.expiresAt,
+                isExactDate = product.isExactDate,
+                brand = product.brand
             )
         }
+        fridgeDao.insertAll(entities)
     }
 
     suspend fun addProduct(
@@ -102,79 +59,61 @@ class SmartFridgeRepository(
         expiresAt: Long,
         isExactDate: Boolean
     ) {
+        val cleanName = name.trim()
+        require(cleanName.isNotEmpty()) { "Название продукта не может быть пустым" }
+        require(quantity.isFinite() && quantity > 0f) { "Количество должно быть больше нуля" }
+        require(expiresAt > 0L) { "Укажите корректный срок годности" }
 
-        val existing =
-            productDao.findByName(name)
-
-        val productId =
-            existing?.id
-                ?: productDao.insert(
-                    ProductCatalogEntity(
-                        name = name,
-                        category = category,
-                        defaultShelfLifeDays = 7,
-                        icon = icon,
-                        isCustom = true
-                    )
-                )
+        val existing = productDao.findByName(cleanName)
+        val productId = existing?.id ?: productDao.insert(
+            ProductCatalogEntity(
+                name = cleanName,
+                category = category.trim().ifBlank { "Другое" },
+                defaultShelfLifeDays = 7,
+                icon = icon.ifBlank { "📦" },
+                isCustom = true
+            )
+        )
 
         fridgeDao.insert(
             FridgeItemEntity(
-
-                productId =
-                    productId,
-
-                name =
-                    name,
-
-                category =
-                    category,
-
-                icon =
-                    icon,
-
-                quantity =
-                    quantity,
-
-                addedAt =
-                    System.currentTimeMillis(),
-
-                expiresAt =
-                    expiresAt,
-
-                isExactDate =
-                    isExactDate
+                productId = productId,
+                name = cleanName,
+                category = category.trim().ifBlank { "Другое" },
+                icon = icon.ifBlank { "📦" },
+                quantity = quantity,
+                addedAt = System.currentTimeMillis(),
+                expiresAt = expiresAt,
+                isExactDate = isExactDate
             )
         )
     }
 
-    suspend fun searchProducts(
-        query: String
-    ): List<ProductCatalogEntity> {
+    suspend fun searchProducts(query: String): List<ProductCatalogEntity> =
+        productDao.search(query.trim())
 
-        return productDao.search(query)
-    }
-
-    suspend fun deleteProduct(
-        product: FridgeProduct
-    ) {
-
-        // В production лучше получить entity по ID.
-        // Для текущего приложения можно добавить DAO-метод deleteById.
-    }
-
-    fun estimatedDate(
-        days: Int
-    ): Long {
-
-        val calendar =
-            Calendar.getInstance()
-
-        calendar.add(
-            Calendar.DAY_OF_YEAR,
-            days
+    suspend fun updateProduct(product: FridgeProduct) {
+        val entity = fridgeDao.getById(product.id) ?: return
+        require(product.name.isNotBlank()) { "Название продукта не может быть пустым" }
+        require(product.quantity.isFinite() && product.quantity > 0f) { "Количество должно быть больше нуля" }
+        require(product.expiresAt > 0L) { "Укажите корректный срок годности" }
+        fridgeDao.update(
+            entity.copy(
+                name = product.name.trim(),
+                category = product.category.trim().ifBlank { "Другое" },
+                icon = product.icon.ifBlank { "📦" },
+                quantity = product.quantity,
+                expiresAt = product.expiresAt,
+                isExactDate = product.isExactDate,
+                brand = product.brand
+            )
         )
-
-        return calendar.timeInMillis
     }
+
+    suspend fun deleteProduct(product: FridgeProduct) {
+        val entity = fridgeDao.getById(product.id) ?: return
+        fridgeDao.delete(entity)
+    }
+
+    suspend fun close() = pipeline.release()
 }

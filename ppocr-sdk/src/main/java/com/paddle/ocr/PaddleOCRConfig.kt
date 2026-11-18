@@ -16,7 +16,8 @@ package com.paddle.ocr
 
 data class PaddleOCRConfig(
     val detImgMode: String = "BGR",
-    val detLimitSideLen: Int = 64,
+    // Standard PaddleOCR detector input scale; 64px was too small for package text.
+    val detLimitSideLen: Int = 960,
     val detLimitType: String = "min",
     val detMaxSideLimit: Int = 4000,
     val detThresh: Float = 0.3f,
@@ -26,6 +27,7 @@ data class PaddleOCRConfig(
     val detUseDilation: Boolean = false,
     val detScoreMode: String = "fast",
     val detBoxType: String = "quad",
-    val recScoreThresh: Float = 0.0f,
+    // Reject low-confidence CTC strings; 0.0 let random one-character outputs through.
+    val recScoreThresh: Float = 0.5f,
     val recBatchSize: Int = 1,
 )

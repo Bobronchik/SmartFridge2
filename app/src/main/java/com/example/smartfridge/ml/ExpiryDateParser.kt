@@ -1,106 +1,96 @@
 package com.example.smartfridge.ml
 
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 object ExpiryDateParser {
-
-    private val patterns =
-        listOf(
-
-            Regex(
-                """(?:годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
-                RegexOption.IGNORE_CASE
-            ),
-
-            Regex(
-                """(?:exp|best before)\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
-                RegexOption.IGNORE_CASE
-            ),
-
-            Regex(
-                """(\d{1,2})[./-](\d{1,2})[./-](\d{4})"""
-            ),
-
-            Regex(
-                """(\d{1,2})[./-](\d{1,2})[./-](\d{2})"""
-            )
+    private val explicitExpiryPatterns = listOf(
+        Regex(
+            """(?:срок\s*годности|годен|годна|годно|употребить|употреблять)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
+            RegexOption.IGNORE_CASE
+        ),
+        Regex(
+            """(?:exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
+            RegexOption.IGNORE_CASE
         )
+    )
 
-    fun findExpiryDate(
-        text: String
-    ): Long? {
+    private val explicitMonthYearPatterns = listOf(
+        Regex("""(?:срок\s*годности|годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE),
+        Regex("""(?:exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE)
+    )
 
-        for (pattern in patterns) {
+    private val explicitIsoExpiryPattern = Regex(
+        """(?:срок\s*годности|годен|годна|годно|употребить|употреблять|exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*(?:до)?\s*:?\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})""",
+        RegexOption.IGNORE_CASE
+    )
+    private val genericDatePattern = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""")
+    private val manufacturingMarker = Regex(
+        """(дата\s*изготовления|изготовлен[оа]?|произведен[оа]?|дата\s*производства|mfg|manufactured)""",
+        RegexOption.IGNORE_CASE
+    )
 
-            val match =
-                pattern.find(text)
-                    ?: continue
+    fun findExpiryDate(text: String): Long? {
+        if (text.isBlank()) return null
 
-            val day =
-                match.groupValues[1]
-                    .toIntOrNull()
-                    ?: continue
-
-            val month =
-                match.groupValues[2]
-                    .toIntOrNull()
-                    ?: continue
-
-            var year =
-                match.groupValues[3]
-                    .toIntOrNull()
-                    ?: continue
-
-            if (year < 100) {
-                year += 2000
+        for (pattern in explicitExpiryPatterns) {
+            for (match in pattern.findAll(text)) {
+                val day = match.groupValues[1].toIntOrNull() ?: continue
+                val month = match.groupValues[2].toIntOrNull() ?: continue
+                var year = match.groupValues[3].toIntOrNull() ?: continue
+                if (year < 100) year += 2000
+                createDate(day, month, year)?.let { return it }
             }
-
-            if (
-                day !in 1..31 ||
-                month !in 1..12
-            ) {
-                continue
-            }
-
-            return createDate(
-                day,
-                month,
-                year
-            )
         }
 
-        return null
+        // ISO 8601-like labels are common on imported packages and OCR output.
+        for (match in explicitIsoExpiryPattern.findAll(text)) {
+            val year = match.groupValues[1].toIntOrNull() ?: continue
+            val month = match.groupValues[2].toIntOrNull() ?: continue
+            val day = match.groupValues[3].toIntOrNull() ?: continue
+            createDate(day, month, year)?.let { return it }
+        }
+
+        for (pattern in explicitMonthYearPatterns) {
+            for (match in pattern.findAll(text)) {
+                val month = match.groupValues[1].toIntOrNull() ?: continue
+                val year = match.groupValues[2].toIntOrNull() ?: continue
+                createDate(lastDayOfMonth(month, year), month, year)?.let { return it }
+            }
+        }
+
+        // Once a manufacturing marker is present, never fall back to an unlabeled
+        // date: OCR may have missed the expiry label and the first date may be MFG.
+        if (manufacturingMarker.containsMatchIn(text)) {
+            return null
+        }
+
+        val match = genericDatePattern.find(text) ?: return null
+        val day = match.groupValues[1].toIntOrNull() ?: return null
+        val month = match.groupValues[2].toIntOrNull() ?: return null
+        var year = match.groupValues[3].toIntOrNull() ?: return null
+        if (year < 100) year += 2000
+        return createDate(day, month, year)
     }
 
-    private fun createDate(
-        day: Int,
-        month: Int,
-        year: Int
-    ): Long? {
+    private fun lastDayOfMonth(month: Int, year: Int): Int? {
+        if (month !in 1..12 || year !in 2000..2200) return null
+        return Calendar.getInstance(Locale.ROOT).apply {
+            clear()
+            set(year, month - 1, 1)
+        }.getActualMaximum(Calendar.DAY_OF_MONTH)
+    }
 
+    private fun createDate(day: Int?, month: Int, year: Int): Long? {
+        if (day == null || day !in 1..31 || month !in 1..12 || year !in 2000..2200) return null
         return try {
-
-            val calendar =
-                Calendar.getInstance()
-
-            calendar.clear()
-
-            calendar.set(
-                year,
-                month - 1,
-                day,
-                23,
-                59,
-                59
-            )
-
-            calendar.timeInMillis
-
+            Calendar.getInstance().apply {
+                isLenient = false
+                clear()
+                set(year, month - 1, day, 23, 59, 59)
+                set(Calendar.MILLISECOND, 999)
+            }.timeInMillis
         } catch (_: Exception) {
-
             null
         }
     }

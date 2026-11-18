@@ -2,6 +2,13 @@
 package com.example.smartfridge
 
 import android.os.Bundle
+import android.content.SharedPreferences
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.example.smartfridge.notifications.ExpiryNotificationScheduler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -31,17 +38,46 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         OpenCVLoader.initLocal()
+        ExpiryNotificationScheduler.createNotificationChannel(applicationContext)
+        ExpiryNotificationScheduler.schedule(applicationContext)
+
+        val notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { /* Разрешение можно изменить позже в системных настройках. */ }
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         setContent {
-            SmartFridgeTheme {
-                SmartFridgeRoot()
+            val preferences = getSharedPreferences("smartfridge_settings", MODE_PRIVATE)
+            var darkTheme by remember { mutableStateOf(preferences.getBoolean("dark_theme", true)) }
+            SmartFridgeTheme(darkTheme = darkTheme) {
+                SmartFridgeRoot(
+                    preferences = preferences,
+                    darkTheme = darkTheme,
+                    onThemeChange = { enabled ->
+                        darkTheme = enabled
+                        preferences.edit().putBoolean("dark_theme", enabled).apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SmartFridgeRoot() {
+private fun SmartFridgeRoot(
+    preferences: SharedPreferences,
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
+) {
 
     val context = LocalContext.current
 
@@ -132,65 +168,42 @@ private fun SmartFridgeRoot() {
         FridgeViewModel(repo)
     }
 
-    SmartFridgeContent(fridgeViewModel)
+    SmartFridgeContent(fridgeViewModel, preferences, darkTheme, onThemeChange)
 }
 
 @Composable
 private fun SmartFridgeContent(
-    viewModel: FridgeViewModel
+    viewModel: FridgeViewModel,
+    preferences: SharedPreferences,
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
 ) {
 
     val state by viewModel.uiState.collectAsState()
+    val suggestions by viewModel.productSuggestions.collectAsState()
+    val catalog by viewModel.productCatalog.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    var connected by remember {
-        mutableStateOf(false)
+    val shoppingItems = remember {
+        mutableStateListOf<String>().apply {
+            addAll(preferences.getStringSet("smartfridge_shopping_list", emptySet()).orEmpty().sorted())
+        }
     }
 
-    var searching by remember {
-        mutableStateOf(false)
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.dispose() }
     }
 
     var cameraAddress by remember {
-        mutableStateOf<String?>(null)
+        mutableStateOf(preferences.getString("camera_address", "") ?: "")
+    }
+    var cameraScanIntervalMinutes by remember {
+        mutableStateOf(preferences.getInt("camera_scan_interval_minutes", 1).coerceIn(1, 1440))
     }
 
     var showAddDialog by remember {
         mutableStateOf(false)
-    }
-
-    if (!connected) {
-
-        CameraSetupScreen(
-            connected = false,
-            searching = searching,
-
-            onSearch = {
-                searching = true
-
-                scope.launch {
-                    try {
-                        val ip = discoverCamera(context)
-
-                        if (ip != null) {
-                            cameraAddress = ip
-                            connected = true
-                            viewModel.setCameraConnected(true)
-                        }
-                    } finally {
-                        searching = false
-                    }
-                }
-            },
-
-            onDone = {
-                connected = true
-            }
-        )
-
-        return
     }
 
     FridgeScreen(
@@ -205,21 +218,75 @@ private fun SmartFridgeContent(
         },
 
         onScan = {
-            val address = cameraAddress
-
-            if (address != null) {
-                viewModel.scan(address)
+            val address = cameraAddress.trim()
+            if (address.isNotBlank()) {
+                viewModel.scan(address, cameraScanIntervalMinutes)
+            } else {
+                viewModel.setMessage("Укажи адрес камеры в настройках.")
             }
         },
 
         onAdd = {
             showAddDialog = true
+        },
+        onDelete = viewModel::deleteProduct,
+        onUpdateProduct = viewModel::updateProduct,
+        darkTheme = darkTheme,
+        onThemeChange = onThemeChange,
+        cameraAddress = cameraAddress,
+        onCameraAddressChange = { cameraAddress = it },
+        onSaveSettings = {
+            preferences.edit()
+                .putString("camera_address", cameraAddress.trim())
+                .putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes)
+                .apply()
+            viewModel.setMessage("Настройки камеры сохранены")
+        },
+        onFindCamera = {
+            if (!state.cameraSearching) scope.launch {
+                viewModel.setCameraSearching(true)
+                try {
+                    viewModel.setMessage("Ищем камеру в локальной сети…")
+                    val found = withContext(Dispatchers.IO) { discoverCamera(context) }
+                    if (found != null) {
+                        cameraAddress = found
+                        preferences.edit().putString("camera_address", found).apply()
+                        viewModel.setMessage("Камера найдена: $found")
+                    } else {
+                        viewModel.setMessage("Камера не найдена. Проверь, что телефон и камера в одной сети.")
+                    }
+                } finally {
+                    viewModel.setCameraSearching(false)
+                }
+            }
+        },
+        onConfirmScan = viewModel::confirmScanReview,
+        onDismissScan = viewModel::dismissScanReview,
+        onUpdatePendingProduct = viewModel::updatePendingProduct,
+        onRemovePendingProduct = viewModel::removePendingProduct,
+        cameraScanIntervalMinutes = cameraScanIntervalMinutes,
+        onCameraScanIntervalChange = {
+            cameraScanIntervalMinutes = it.coerceIn(1, 1440)
+            preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
+        },
+        onSaveCameraInterval = {
+            preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
+            viewModel.setMessage("Интервал между снимками сохранён")
+        },
+        shoppingItems = shoppingItems,
+        onAddShoppingItem = { name ->
+            if (shoppingItems.none { it.equals(name, ignoreCase = true) }) shoppingItems.add(name)
+            preferences.edit().putStringSet("smartfridge_shopping_list", shoppingItems.toSet()).apply()
+        },
+        onRemoveShoppingItem = { name ->
+            shoppingItems.remove(name)
+            preferences.edit().putStringSet("smartfridge_shopping_list", shoppingItems.toSet()).apply()
         }
     )
 
     if (showAddDialog) {
         AddProductDialog(
-            suggestions = emptyList(),
+            suggestions = catalog,
 
             onSearch = {
                 viewModel.searchCatalog(it)
@@ -237,16 +304,17 @@ private fun SmartFridgeContent(
                     expiresAt,
                     exact ->
 
-                viewModel.addProduct(
-                    name,
-                    category,
-                    icon,
-                    quantity,
-                    expiresAt,
-                    exact
-                )
-
-                showAddDialog = false
+                scope.launch {
+                    val saved = viewModel.addProduct(
+                        name,
+                        category,
+                        icon,
+                        quantity,
+                        expiresAt,
+                        exact
+                    )
+                    if (saved) showAddDialog = false
+                }
             }
         )
     }

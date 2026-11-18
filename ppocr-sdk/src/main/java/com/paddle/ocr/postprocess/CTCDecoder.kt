@@ -14,33 +14,84 @@
 
 package com.paddle.ocr.postprocess
 
+import kotlin.math.abs
+import kotlin.math.exp
+
 object CTCDecoder {
     private const val BLANK_IDX = 0
+    private const val PROBABILITY_SUM_TOLERANCE = 0.05f
 
     fun decode(output: FloatArray, shape: LongArray, characterList: List<String>): List<Pair<String, Float>> {
+        require(shape.size == 3) {
+            "Recognition output must have [batch, time, classes] shape, got ${shape.contentToString()}"
+        }
+
         val batchSize = shape[0].toInt()
         val timeSteps = shape[1].toInt()
         val numClasses = shape[2].toInt()
+        require(batchSize >= 0 && timeSteps > 0 && numClasses > 1) {
+            "Invalid recognition output shape: ${shape.contentToString()}"
+        }
+        require(numClasses == characterList.size + 1) {
+            "Recognition dictionary mismatch: model has $numClasses classes, " +
+                "but dictionary has ${characterList.size} characters (+ CTC blank expected)"
+        }
+        require(output.size == batchSize * timeSteps * numClasses) {
+            "Recognition output size ${output.size} does not match shape ${shape.contentToString()}"
+        }
 
         val results = mutableListOf<Pair<String, Float>>()
         for (b in 0 until batchSize) {
             val baseOffset = b * timeSteps * numClasses
-
             val indices = IntArray(timeSteps)
             val probs = FloatArray(timeSteps)
+
             for (t in 0 until timeSteps) {
                 val offset = baseOffset + t * numClasses
                 var maxIdx = 0
-                var maxVal = output[offset]
-                for (c in 1 until numClasses) {
-                    val v = output[offset + c]
-                    if (v > maxVal) {
-                        maxVal = v
+                var maxVal = Float.NEGATIVE_INFINITY
+                var minVal = Float.POSITIVE_INFINITY
+                var rowSum = 0.0
+
+                for (c in 0 until numClasses) {
+                    val value = output[offset + c]
+                    if (!value.isFinite()) continue
+                    if (value > maxVal) {
+                        maxVal = value
                         maxIdx = c
                     }
+                    if (value < minVal) minVal = value
+                    rowSum += value
                 }
+
+                if (!maxVal.isFinite()) {
+                    indices[t] = BLANK_IDX
+                    probs[t] = 0f
+                    continue
+                }
+
+                // Paddle exports may expose post-softmax probabilities or raw logits.
+                // Argmax is identical; normalize only when the row is not already probabilities.
+                val isProbabilityRow =
+                    minVal >= 0f &&
+                    maxVal <= 1f &&
+                    abs(rowSum - 1.0) <= PROBABILITY_SUM_TOLERANCE.toDouble()
+
+                val confidence = if (isProbabilityRow) {
+                    maxVal
+                } else {
+                    var denominator = 0.0
+                    for (c in 0 until numClasses) {
+                        val value = output[offset + c]
+                        if (value.isFinite()) {
+                            denominator += exp((value - maxVal).toDouble())
+                        }
+                    }
+                    if (denominator > 0.0) (1.0 / denominator).toFloat() else 0f
+                }
+
                 indices[t] = maxIdx
-                probs[t] = maxVal
+                probs[t] = confidence
             }
 
             val keptProbs = mutableListOf<Float>()
@@ -50,10 +101,8 @@ object CTCDecoder {
                 val idx = indices[t]
                 if (idx != BLANK_IDX && idx != prevIdx) {
                     val charIdx = idx - 1
-                    if (charIdx >= 0 && charIdx < characterList.size) {
-                        sb.append(characterList[charIdx])
-                        keptProbs.add(probs[t])
-                    }
+                    sb.append(characterList[charIdx])
+                    keptProbs.add(probs[t])
                 }
                 prevIdx = idx
             }

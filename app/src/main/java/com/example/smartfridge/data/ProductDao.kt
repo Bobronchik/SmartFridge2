@@ -19,7 +19,7 @@ interface ProductDao {
     @Query(
         """
         SELECT * FROM product_catalog
-        WHERE name LIKE '%' || :query || '%'
+        WHERE instr(LOWER(name), LOWER(:query)) > 0
         ORDER BY name ASC
         """
     )
@@ -58,6 +58,9 @@ interface ProductDao {
     suspend fun insertAll(
         products: List<ProductCatalogEntity>
     )
+
+    @Query("DELETE FROM product_catalog WHERE isCustom = 0 AND name NOT IN (:allowedNames)")
+    suspend fun deleteNonStandardDefaults(allowedNames: List<String>)
 
     @Query(
         """
