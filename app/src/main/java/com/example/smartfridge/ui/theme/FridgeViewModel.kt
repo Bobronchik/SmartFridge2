@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlin.math.roundToInt
 
 data class FridgeUiState(
@@ -240,6 +241,7 @@ class FridgeViewModel(
     fun dispose() {
         if (disposed) return
         disposed = true
+        viewModelScope.cancel()
         lastImage.value?.let { if (!it.isRecycled) it.recycle() }
         lastImage.value = null
         CoroutineScope(Dispatchers.IO).launch { repository.close() }
