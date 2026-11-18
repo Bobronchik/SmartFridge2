@@ -23,6 +23,16 @@ class ExpiryDateParserTest {
     }
 
     @Test
+    fun recognizesRussianShelfLifeLabelAfterManufacturingDate() {
+        val parsed = ExpiryDateParser.findExpiryDate(
+            "Дата производства 01.02.2026. Срок годности 03.02.2026"
+        )
+        val calendar = Calendar.getInstance().apply { timeInMillis = requireNotNull(parsed) }
+        assertEquals(3, calendar.get(Calendar.DAY_OF_MONTH))
+        assertEquals(Calendar.FEBRUARY, calendar.get(Calendar.MONTH))
+    }
+
+    @Test
     fun doesNotTreatManufacturingDateAsExpiry() {
         assertNull(ExpiryDateParser.findExpiryDate("Дата изготовления 01.02.2026"))
     }
