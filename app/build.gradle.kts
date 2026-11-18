@@ -51,6 +51,7 @@ dependencies {
     // Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
 
     // Room
     implementation("androidx.room:room-runtime:2.7.2")
