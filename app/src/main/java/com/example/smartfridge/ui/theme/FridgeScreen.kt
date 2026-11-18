@@ -1,5 +1,7 @@
 package com.example.smartfridge.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -383,6 +385,7 @@ private fun FridgeHome(
                 TextButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+ Добавить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
             }
             Spacer(Modifier.height(4.dp))
+            Text("Свайп влево — удалить · вправо — изменить", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             OutlinedTextField(
                 value = state.search,
                 onValueChange = onSearch,
@@ -591,6 +594,11 @@ private fun ProductCard(
     }
     val expiry = SimpleDateFormat("dd MMM yyyy", Locale("ru")).format(Date(product.expiresAt))
     val added = SimpleDateFormat("dd MMM, HH:mm", Locale("ru")).format(Date(product.addedAt))
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 650),
+        label = "freshness-progress"
+    )
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -631,7 +639,7 @@ private fun ProductCard(
                 ) {
                     Box(
                         Modifier.align(Alignment.CenterEnd)
-                            .fillMaxWidth(1f - progress)
+                            .fillMaxWidth(1f - animatedProgress)
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     )
