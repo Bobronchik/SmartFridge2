@@ -20,6 +20,10 @@ object ExpiryDateParser {
         Regex("""(?:exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE)
     )
 
+    private val explicitIsoExpiryPattern = Regex(
+        """(?:срок\\s*годности|годен|годна|годно|употребить|употреблять|exp(?:iry)?(?:\\s*date)?|best\\s*before|use\\s*by)\\s*:?\\s*(\\d{4})[./-](\\d{1,2})[./-](\\d{1,2})""",
+        RegexOption.IGNORE_CASE
+    )
     private val genericDatePattern = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""")
     private val manufacturingMarker = Regex(
         """(дата\s*изготовления|изготовлен[оа]?|произведен[оа]?|дата\s*производства|mfg|manufactured)""",
@@ -34,24 +38,34 @@ object ExpiryDateParser {
         if (text.isBlank()) return null
 
         for (pattern in explicitExpiryPatterns) {
-            val match = pattern.find(text) ?: continue
-            val day = match.groupValues[1].toIntOrNull() ?: continue
+            for (match in pattern.findAll(text)) {
+                val day = match.groupValues[1].toIntOrNull() ?: continue
+                val month = match.groupValues[2].toIntOrNull() ?: continue
+                var year = match.groupValues[3].toIntOrNull() ?: continue
+                if (year < 100) year += 2000
+                createDate(day, month, year)?.let { return it }
+            }
+        }
+
+        // ISO 8601-like labels are common on imported packages and OCR output.
+        for (match in explicitIsoExpiryPattern.findAll(text)) {
+            val year = match.groupValues[1].toIntOrNull() ?: continue
             val month = match.groupValues[2].toIntOrNull() ?: continue
-            var year = match.groupValues[3].toIntOrNull() ?: continue
-            if (year < 100) year += 2000
+            val day = match.groupValues[3].toIntOrNull() ?: continue
             createDate(day, month, year)?.let { return it }
         }
 
         for (pattern in explicitMonthYearPatterns) {
-            val match = pattern.find(text) ?: continue
-            val month = match.groupValues[1].toIntOrNull() ?: continue
-            val year = match.groupValues[2].toIntOrNull() ?: continue
-            createDate(lastDayOfMonth(month, year), month, year)?.let { return it }
+            for (match in pattern.findAll(text)) {
+                val month = match.groupValues[1].toIntOrNull() ?: continue
+                val year = match.groupValues[2].toIntOrNull() ?: continue
+                createDate(lastDayOfMonth(month, year), month, year)?.let { return it }
+            }
         }
 
-        // A bare date is ambiguous. If the package explicitly labels a production
-        // date but OCR missed the expiry label, never mistake MFG for EXP.
-        if (manufacturingMarker.containsMatchIn(text) && !explicitExpiryMarker.containsMatchIn(text)) {
+        // Once a manufacturing marker is present, never fall back to an unlabeled
+        // date: OCR may have missed the expiry label and the first date may be MFG.
+        if (manufacturingMarker.containsMatchIn(text)) {
             return null
         }
 
