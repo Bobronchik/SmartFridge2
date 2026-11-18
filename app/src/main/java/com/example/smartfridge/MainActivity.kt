@@ -3,6 +3,12 @@ package com.example.smartfridge
 
 import android.os.Bundle
 import android.content.SharedPreferences
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.example.smartfridge.notifications.ExpiryNotificationScheduler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -32,6 +38,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         OpenCVLoader.initLocal()
+        ExpiryNotificationScheduler.schedule(applicationContext)
+
+        val notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { /* Разрешение можно изменить позже в системных настройках. */ }
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         setContent {
             val preferences = getSharedPreferences("smartfridge_settings", MODE_PRIVATE)
