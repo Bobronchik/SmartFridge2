@@ -2,6 +2,7 @@ package com.example.smartfridge.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -270,12 +271,45 @@ private fun FridgeHome(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text("Последний кадр камеры", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    Image(
-                        bitmap = state.lastImage.asImageBitmap(),
-                        contentDescription = "Последний снимок с камеры",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).clip(RoundedCornerShape(18.dp)),
-                        contentScale = ContentScale.Fit
-                    )
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp))
+                    ) {
+                        val frame = state.lastImage
+                        Image(
+                            bitmap = frame.asImageBitmap(),
+                            contentDescription = "Предпросмотр камеры с рамками распознанных продуктов",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                        val scale = minOf(maxWidth.value / frame.width, maxHeight.value / frame.height)
+                        val renderedWidth = frame.width * scale
+                        val renderedHeight = frame.height * scale
+                        val offsetX = (maxWidth.value - renderedWidth) / 2f
+                        val offsetY = (maxHeight.value - renderedHeight) / 2f
+                        state.previewDetections.forEach { detection ->
+                            val left = offsetX + detection.left * scale
+                            val top = offsetY + detection.top * scale
+                            val width = (detection.right - detection.left) * scale
+                            val height = (detection.bottom - detection.top) * scale
+                            if (width > 2f && height > 2f) {
+                                Box(
+                                    Modifier.offset(x = left.dp, y = top.dp)
+                                        .size(width = width.dp, height = height.dp)
+                                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp))
+                                ) {
+                                    Text(
+                                        "${detection.name} · ${(detection.confidence * 100).toInt()}%",
+                                        modifier = Modifier.align(Alignment.TopStart)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
