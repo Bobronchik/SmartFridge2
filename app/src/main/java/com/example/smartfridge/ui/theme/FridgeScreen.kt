@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 private val Canvas = Color(0xFFF7F8F4)
 private val CardWhite = Color(0xFFFFFFFF)
@@ -791,7 +792,7 @@ private fun ScanReviewDialog(
     val currentIndex = editingDateIndex
     val currentProduct = currentIndex?.let { products.getOrNull(it) }
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentProduct?.expiresAt ?: System.currentTimeMillis()
+        initialSelectedDateMillis = currentProduct?.expiresAt?.let(::toDatePickerMillis) ?: toDatePickerMillis(System.currentTimeMillis())
     )
 
     AlertDialog(
@@ -825,7 +826,7 @@ private fun ScanReviewDialog(
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = {
-                                        datePickerState.selectedDateMillis = product.expiresAt
+                                        datePickerState.selectedDateMillis = toDatePickerMillis(product.expiresAt)
                                         editingDateIndex = index
                                     }) {
                                         Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(product.expiresAt)))
@@ -860,7 +861,7 @@ private fun ScanReviewDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let {
-                        onUpdate(currentIndex, currentProduct.name, it, true)
+                        onUpdate(currentIndex, currentProduct.name, fromDatePickerMillis(it), true)
                     }
                     editingDateIndex = null
                 }) { Text("Выбрать") }
@@ -885,7 +886,7 @@ private fun EditProductDialog(
     var expiryDate by remember(product.id) { mutableStateOf(product.expiresAt) }
     var exact by remember(product.id) { mutableStateOf(product.isExactDate) }
     var showDatePicker by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = expiryDate)
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = toDatePickerMillis(expiryDate))
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -901,7 +902,7 @@ private fun EditProductDialog(
                     singleLine = true
                 )
                 OutlinedButton(onClick = {
-                    datePickerState.selectedDateMillis = expiryDate
+                    datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate)
                     showDatePicker = true
                 }) {
                     Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(expiryDate)))
@@ -933,7 +934,7 @@ private fun EditProductDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let {
-                        expiryDate = it
+                        expiryDate = fromDatePickerMillis(it)
                         exact = true
                     }
                     showDatePicker = false
@@ -944,3 +945,20 @@ private fun EditProductDialog(
     }
 }
 
+
+private fun toDatePickerMillis(localDateMillis: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = localDateMillis }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
+    }.timeInMillis
+}
+
+private fun fromDatePickerMillis(utcDateMillis: Long): Long {
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcDateMillis }
+    return Calendar.getInstance().apply {
+        clear()
+        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), 23, 59, 59)
+        set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+}
