@@ -59,7 +59,11 @@ fun AddProductDialog(
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 720.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .widthIn(max = 520.dp)
+                .heightIn(max = 720.dp),
             shape = RoundedCornerShape(30.dp),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 18.dp
@@ -88,7 +92,10 @@ fun AddProductDialog(
                 }
 
                 Column(
-                    Modifier.weight(1f, fill = false).fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                    Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(11.dp)
                 ) {
                     if (!customMode) {
@@ -158,7 +165,10 @@ fun AddProductDialog(
                     OutlinedTextField(
                         value = quantity,
                         onValueChange = { value -> quantity = value.filter { it.isDigit() || it == '.' || it == ',' }.take(8) },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(min = 0.dp),
+                        singleLine = true,
                         label = { Text("Количество (шт. или кг)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(14.dp)
@@ -174,9 +184,33 @@ fun AddProductDialog(
                             Text("Изменить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = exact, onCheckedChange = { exact = it })
-                        Text("Это точная дата с упаковки", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .clickable { exact = !exact }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = exact,
+                            onCheckedChange = { exact = it }
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Дата указана на упаковке",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "Отметь, если срок годности считан с этикетки",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
                     validationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
                 }
