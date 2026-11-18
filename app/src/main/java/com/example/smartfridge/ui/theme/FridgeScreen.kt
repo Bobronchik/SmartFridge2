@@ -495,7 +495,10 @@ private fun ShoppingListDialog(items: List<String>, onRemove: (String) -> Unit, 
                     Text("Пока ничего не нужно купить", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.heightIn(max = 360.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                    modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                ) {
                     items.forEach { item ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(item, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
@@ -572,25 +575,21 @@ private fun ProductCard(
     val freshness = getFreshness(product.expiresAt)
     val status: String
     val color: Color
-    val background: Color
     val progress: Float
     when (freshness) {
         Freshness.FRESH -> {
             status = "Свежий продукт"
             color = MaterialTheme.colorScheme.primary
-            background = MaterialTheme.colorScheme.surfaceVariant
             progress = freshnessProgress(product)
         }
         Freshness.EXPIRING_SOON -> {
             status = "Скоро испортится"
             color = MaterialTheme.colorScheme.tertiary
-            background = MaterialTheme.colorScheme.tertiaryContainer
             progress = freshnessProgress(product)
         }
         Freshness.EXPIRED -> {
             status = "Срок истёк"
             color = MaterialTheme.colorScheme.error
-            background = MaterialTheme.colorScheme.errorContainer
             progress = freshnessProgress(product)
         }
     }
@@ -613,8 +612,8 @@ private fun ProductCard(
                 },
                 onDragEnd = {
                     when {
-                        horizontalDrag < -72f -> onDelete()
-                        horizontalDrag > 72f -> onEdit()
+                        horizontalDrag < -72.dp.toPx() -> onDelete()
+                        horizontalDrag > 72.dp.toPx() -> onEdit()
                     }
                     horizontalDrag = 0f
                 },
