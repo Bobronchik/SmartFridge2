@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.smartfridge.domain.Freshness
 import com.example.smartfridge.domain.FridgeProduct
 import com.example.smartfridge.domain.getFreshness
@@ -452,7 +454,7 @@ private fun FridgeHome(
                     product = product,
                     onDelete = { onDelete(product) },
                     onEdit = { onEdit(product) },
-                    onQuantityChange = { next -> onUpdateProduct(product.copy(quantity = next.coerceAtLeast(0.1f))) }
+                    onQuantityChange = { next -> onUpdateProduct(product.copy(quantity = next.toInt().coerceAtLeast(1).toFloat())) }
                 )
             }
         }
@@ -635,7 +637,7 @@ private fun ProductCard(
             Spacer(Modifier.width(13.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(product.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("${product.quantity} шт. · ${product.category}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Text("${product.quantity.toInt().coerceAtLeast(1)} шт. · ${product.category}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 Text("Добавлен: $added", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                 Spacer(Modifier.height(3.dp))
                 Text("Годен до: $expiry", color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -661,19 +663,16 @@ private fun ProductCard(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
-                        val step = if (product.quantity >= 1f && product.quantity % 1f == 0f) 1f else .1f
-                        onQuantityChange((product.quantity - step).coerceAtLeast(.1f))
+                        onQuantityChange((product.quantity.toInt() - 1).coerceAtLeast(1).toFloat())
                     }, modifier = Modifier.size(30.dp)) { Text("−", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface) }
                     Text(
-                        if (product.quantity % 1f == 0f) product.quantity.toInt().toString()
-                        else String.format(Locale.getDefault(), "%.1f", product.quantity),
+                        product.quantity.toInt().coerceAtLeast(1).toString(),
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                     IconButton(onClick = {
-                        val step = if (product.quantity >= 1f && product.quantity % 1f == 0f) 1f else .1f
-                        onQuantityChange(product.quantity + step)
+                        onQuantityChange((product.quantity.toInt() + 1).toFloat())
                     }, modifier = Modifier.size(30.dp)) { Text("+", fontSize = 17.sp, color = MaterialTheme.colorScheme.primary) }
                 }
                 TextButton(onClick = onEdit, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
@@ -1124,69 +1123,115 @@ private fun EditProductDialog(
     onSave: (FridgeProduct) -> Unit
 ) {
     var name by remember(product.id) { mutableStateOf(product.name) }
-    var quantity by remember(product.id) { mutableStateOf(product.quantity.toString()) }
+    var quantity by remember(product.id) { mutableStateOf(product.quantity.toInt().coerceAtLeast(1).toString()) }
     var expiryDate by remember(product.id) { mutableStateOf(product.expiresAt) }
     var exact by remember(product.id) { mutableStateOf(product.isExactDate) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = toDatePickerMillis(expiryDate))
+    val parsedQuantity = quantity.toIntOrNull()
+    val canSave = name.isNotBlank() && parsedQuantity != null && parsedQuantity > 0 && expiryDate >= startOfEditTodayMillis()
+    val dateLabel = remember(expiryDate) { SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(Date(expiryDate)) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Изменить продукт") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Название") }, singleLine = true)
-                OutlinedTextField(
-                    value = quantity,
-                    onValueChange = { value -> quantity = value.filter { it.isDigit() || it == '.' || it == ',' } },
-                    label = { Text("Количество") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
-                )
-                OutlinedButton(onClick = {
-                    datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate)
-                    showDatePicker = true
-                }) {
-                    Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(expiryDate)))
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.88f).padding(horizontal = 18.dp).widthIn(max = 520.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 20.dp
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)).padding(horizontal = 22.dp, vertical = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("МОЙ ХОЛОДИЛЬНИК", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Spacer(Modifier.height(5.dp))
+                        Text("Изменить продукт", color = MaterialTheme.colorScheme.onSurface, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                        Text("Обнови данные и сохрани изменения", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    }
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { Text(product.icon, fontSize = 25.sp) }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = exact, onCheckedChange = { exact = it })
-                    Text("Дата точная (с упаковки)", fontSize = 12.sp)
+
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState).padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(15.dp)
+                ) {
+                    OutlinedTextField(value = name, onValueChange = { name = it; validationError = null }, modifier = Modifier.fillMaxWidth(), label = { Text("Название продукта") }, placeholder = { Text("Например, молоко") }, singleLine = true, shape = RoundedCornerShape(15.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Text("Количество", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(onClick = { quantity = ((parsedQuantity ?: 1) - 1).coerceAtLeast(1).toString(); validationError = null }, modifier = Modifier.size(50.dp), contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(14.dp)) { Text("−", fontSize = 23.sp) }
+                            OutlinedTextField(value = quantity, onValueChange = { value -> if (value.all { it.isDigit() } && value.length <= 5) { quantity = value; validationError = null } }, modifier = Modifier.weight(1f), label = { Text("Штук") }, placeholder = { Text("1") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(14.dp))
+                            FilledTonalButton(onClick = { quantity = ((parsedQuantity ?: 0) + 1).coerceAtMost(99999).toString(); validationError = null }, modifier = Modifier.size(50.dp), contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(14.dp)) { Text("+", fontSize = 23.sp) }
+                        }
+                        Text("Только целые числа: 1, 2, 3 и так далее", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+
+                    Surface(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate); showDatePicker = true }, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f), shape = RoundedCornerShape(16.dp)) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { Text("📅", fontSize = 22.sp) }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Срок годности", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                Text(dateLabel, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (exact) "Дата с упаковки" else "Предположительная дата", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            }
+                            Text("Изменить", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f)).clickable { exact = !exact }.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = exact, onCheckedChange = { exact = it })
+                        Spacer(Modifier.width(6.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Дата указана на упаковке", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text("Отметь, если переписал срок с этикетки", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                        }
+                    }
+                    validationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f)).padding(15.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("Отмена") }
+                    Button(
+                        onClick = {
+                            val amount = quantity.toIntOrNull()
+                            when {
+                                name.isBlank() -> validationError = "Введи название продукта."
+                                amount == null || amount < 1 -> validationError = "Количество должно быть целым числом больше нуля."
+                                expiryDate < startOfEditTodayMillis() -> validationError = "Срок годности не может быть в прошлом."
+                                else -> onSave(product.copy(name = name.trim(), quantity = amount.toFloat(), expiresAt = expiryDate, isExactDate = exact))
+                            }
+                        },
+                        enabled = canSave,
+                        modifier = Modifier.weight(1.25f).height(49.dp),
+                        shape = RoundedCornerShape(15.dp)
+                    ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val parsedQuantity = quantity.replace(',', '.').toFloatOrNull()
-                    if (name.isNotBlank() && parsedQuantity != null && parsedQuantity.isFinite() && parsedQuantity > 0f) {
-                        onSave(product.copy(name = name.trim(), quantity = parsedQuantity, expiresAt = expiryDate, isExactDate = exact))
-                    }
-                },
-                enabled = name.isNotBlank() && (quantity.replace(',', '.').toFloatOrNull()?.let { it.isFinite() && it > 0f } == true)
-            ) { Text("Сохранить") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = MaterialTheme.colorScheme.surface
-    )
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        expiryDate = fromDatePickerMillis(it)
-                        exact = true
-                    }
-                    showDatePicker = false
-                }) { Text("Выбрать") }
-            },
+            confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { expiryDate = fromDatePickerMillis(it); exact = true; validationError = null }; showDatePicker = false }) { Text("Выбрать") } },
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }
         ) { DatePicker(state = datePickerState, showModeToggle = false) }
     }
 }
 
+private fun startOfEditTodayMillis(): Long = Calendar.getInstance().apply {
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
 
 private fun toDatePickerMillis(localDateMillis: Long): Long {
     val local = Calendar.getInstance().apply { timeInMillis = localDateMillis }
