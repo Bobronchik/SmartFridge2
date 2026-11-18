@@ -8,6 +8,8 @@ import com.paddle.ocr.PaddleOCR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Locale
 
 data class RecognizedProduct(
@@ -35,8 +37,11 @@ class FridgeVisionPipeline(
         private const val CROP_PADDING_RATIO = 0.08f
     }
 
+    private val engineMutex = Mutex()
+
     suspend fun analyze(bitmap: Bitmap): List<RecognizedProduct> =
         withContext(Dispatchers.Default) {
+            engineMutex.withLock {
             val detections = yoloDetector.detect(bitmap)
             Log.d(TAG, "Frame ${bitmap.width}x${bitmap.height}: ${detections.size} YOLO detections")
 
@@ -96,6 +101,7 @@ class FridgeVisionPipeline(
                 )
             }
             results
+            }
         }
 
     private fun findCatalogProduct(
@@ -180,11 +186,13 @@ class FridgeVisionPipeline(
         }
     }
 
-    suspend fun release() {
-        try {
-            yoloDetector.close()
-        } finally {
-            ocr.release()
+    suspend fun release() = withContext(Dispatchers.IO) {
+        engineMutex.withLock {
+            try {
+                yoloDetector.close()
+            } finally {
+                ocr.release()
+            }
         }
     }
 }
