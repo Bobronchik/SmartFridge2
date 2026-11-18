@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 data class FridgeUiState(
     val products: List<FridgeProduct> = emptyList(),
@@ -113,6 +115,7 @@ class FridgeViewModel(
                             return@launch
                         }
                     } else {
+                        cameraConnected.value = true
                         lastImage.value = bitmap
                         val frameProducts = repository.analyze(bitmap)
                         previewDetections.value = frameProducts
@@ -221,7 +224,7 @@ class FridgeViewModel(
         disposed = true
         lastImage.value?.let { if (!it.isRecycled) it.recycle() }
         lastImage.value = null
-        repository.close()
+        CoroutineScope(Dispatchers.IO).launch { repository.close() }
     }
 
     override fun onCleared() {
