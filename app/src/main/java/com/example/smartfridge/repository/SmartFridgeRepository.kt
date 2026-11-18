@@ -158,9 +158,8 @@ class SmartFridgeRepository(
     suspend fun deleteProduct(
         product: FridgeProduct
     ) {
-
-        // В production лучше получить entity по ID.
-        // Для текущего приложения можно добавить DAO-метод deleteById.
+        val entity = fridgeDao.getById(product.id) ?: return
+        fridgeDao.delete(entity)
     }
 
     fun estimatedDate(
