@@ -27,6 +27,7 @@ data class PaddleOCRConfig(
     val detUseDilation: Boolean = false,
     val detScoreMode: String = "fast",
     val detBoxType: String = "quad",
-    val recScoreThresh: Float = 0.0f,
+    // Reject low-confidence CTC strings; 0.0 let random one-character outputs through.
+    val recScoreThresh: Float = 0.5f,
     val recBatchSize: Int = 1,
 )
