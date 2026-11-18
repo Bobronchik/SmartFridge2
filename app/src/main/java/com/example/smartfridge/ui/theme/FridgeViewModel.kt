@@ -106,7 +106,7 @@ class FridgeViewModel(
     fun setCameraSearching(value: Boolean) { cameraSearching.value = value }
     fun setMessage(value: String?) { message.value = value }
 
-    fun scan(address: String, intervalSeconds: Int = 2) {
+    fun scan(address: String, intervalMinutes: Int = 1) {
         if (scanning.value) return
         viewModelScope.launch {
             scanning.value = true
@@ -142,7 +142,7 @@ class FridgeViewModel(
                             }
                         }
                     }
-                    if (frameIndex < 2) delay(intervalSeconds.coerceIn(1, 10) * 1_000L)
+                    if (frameIndex < 2) delay(intervalMinutes.coerceIn(1, 1440) * 60_000L)
                 }
                 val recognized = recognizedByName.values.toList()
                 if (recognized.isEmpty()) {
