@@ -83,7 +83,10 @@ fun FridgeScreen(
                 shape = CircleShape,
                 modifier = Modifier.size(62.dp)
             ) {
-                Text("⌗", fontSize = 27.sp, fontWeight = FontWeight.Light)
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("📷", fontSize = 18.sp)
+                    Text("Скан", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         },
         floatingActionButtonPosition = FabPosition.Center,
@@ -562,7 +565,11 @@ private fun ExpiringRecipesPanel(
             Text("Выбери продукты из холодильника — подберём блюда с ними.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         }
         if (sortedProducts.isEmpty()) {
-            item { EmptyFridge(onAdd = {}) }
+            item {
+                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text("Добавь продукты в холодильник — тогда можно будет подобрать рецепты.", modifier = Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                }
+            }
         } else {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
