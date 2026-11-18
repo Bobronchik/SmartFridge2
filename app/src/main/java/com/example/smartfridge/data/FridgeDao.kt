@@ -18,6 +18,9 @@ interface FridgeDao {
     )
     fun observeAll(): Flow<List<FridgeItemEntity>>
 
+    @Query("SELECT * FROM fridge_items WHERE expiresAt > :now AND expiresAt <= :limit ORDER BY expiresAt ASC")
+    suspend fun getExpiringBetween(now: Long, limit: Long): List<FridgeItemEntity>
+
     @Query("SELECT * FROM fridge_items WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): FridgeItemEntity?
 
