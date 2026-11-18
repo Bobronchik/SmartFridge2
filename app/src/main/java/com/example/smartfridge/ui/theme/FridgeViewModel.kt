@@ -58,18 +58,26 @@ class FridgeViewModel(
     }
 
     private val cameraState = combine(
-        combine(cameraConnected, scanning, lastImage, pendingProducts, previewDetections) {
-                connected, scanningNow, image, pending, detections ->
+        combine(cameraConnected, cameraSearching) { connected, searching ->
+            connected to searching
+        },
+        combine(scanning, lastImage, pendingProducts, previewDetections) {
+                scanningNow, image, pending, detections ->
             FridgeUiState(
-                cameraConnected = connected,
                 scanning = scanningNow,
                 lastImage = image,
                 pendingProducts = pending,
                 previewDetections = detections
             )
-        },
-        message
-    ) { camera, msg -> camera.copy(message = msg) }
+        }
+    ) { connection, scan ->
+        scan.copy(
+            cameraConnected = connection.first,
+            cameraSearching = connection.second
+        )
+    }.let { camera ->
+        combine(camera, message) { state, msg -> state.copy(message = msg) }
+    }
 
     val uiState: StateFlow<FridgeUiState> = combine(productFilters, cameraState) { filters, camera ->
         FridgeUiState(
@@ -242,7 +250,8 @@ class FridgeViewModel(
         if (disposed) return
         disposed = true
         viewModelScope.cancel()
-        lastImage.value?.let { if (!it.isRecycled) it.recycle() }
+        // Do not recycle the displayed frame here: a cancelled scan may still be
+        // finishing synchronous ML inference against the same Bitmap. Let GC reclaim it.
         lastImage.value = null
         CoroutineScope(Dispatchers.IO).launch { repository.close() }
     }
