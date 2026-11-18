@@ -184,7 +184,7 @@ private fun SmartFridgeContent(
 
         onAdd = {
             showAddDialog = true
-        }
+        },
         onDelete = viewModel::deleteProduct
     )
 
