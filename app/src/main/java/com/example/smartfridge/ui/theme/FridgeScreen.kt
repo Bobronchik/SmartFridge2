@@ -171,10 +171,10 @@ private fun FridgeHome(
     onAdd: () -> Unit,
     onDelete: (FridgeProduct) -> Unit
 ) {
-    val categories = listOf("Молочка", "Овощи и фрукты", "Мясо", "Напитки", "Готовое", "Другое")
-    val visibleCategories = categories.filter { category ->
-        state.products.any { it.category.equals(category, ignoreCase = true) }
-    }
+    val visibleCategories = state.products
+        .map { it.category }
+        .distinct()
+        .sorted()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
