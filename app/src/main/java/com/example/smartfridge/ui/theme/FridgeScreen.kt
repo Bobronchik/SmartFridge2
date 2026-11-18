@@ -625,10 +625,16 @@ private fun ProductCard(
                 Spacer(Modifier.height(3.dp))
                 Text("Годен до: $expiry", color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape).background(
-                        Brush.horizontalGradient(listOf(Color(0xFF62B889), Color(0xFFE0B35C), Color(0xFFD87568)))
-                    ))
+                Box(
+                    Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Color(0xFF62B889), Color(0xFFE0B35C), Color(0xFFD87568))))
+                ) {
+                    Box(
+                        Modifier.align(Alignment.CenterEnd)
+                            .fillMaxWidth(1f - progress)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    )
                 }
                 Spacer(Modifier.height(5.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
