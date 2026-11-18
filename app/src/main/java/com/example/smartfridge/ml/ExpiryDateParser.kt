@@ -6,7 +6,7 @@ import java.util.Locale
 object ExpiryDateParser {
     private val explicitExpiryPatterns = listOf(
         Regex(
-            """(?:годен|годна|годно|употребить|употреблять)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
+            """(?:срок\\s*годности|годен|годна|годно|употребить|употреблять)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
             RegexOption.IGNORE_CASE
         ),
         Regex(
@@ -16,7 +16,7 @@ object ExpiryDateParser {
     )
 
     private val explicitMonthYearPatterns = listOf(
-        Regex("""(?:годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE),
+        Regex("""(?:срок\\s*годности|годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE),
         Regex("""(?:exp(?:iry)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE)
     )
 
