@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
@@ -34,6 +36,16 @@ object ExpiryNotificationScheduler {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
             .build()
+
+        val initialCheck = OneTimeWorkRequestBuilder<ExpiryNotificationWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+            "${WORK_NAME}_initial",
+            ExistingWorkPolicy.KEEP,
+            initialCheck
+        )
 
         val request = PeriodicWorkRequestBuilder<ExpiryNotificationWorker>(
             24,
