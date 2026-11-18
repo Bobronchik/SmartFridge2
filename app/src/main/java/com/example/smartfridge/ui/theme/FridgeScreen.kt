@@ -65,7 +65,7 @@ fun FridgeScreen(
     onDismissScan: () -> Unit = {},
     onUpdatePendingProduct: (Int, String, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onRemovePendingProduct: (Int) -> Unit = {},
-    cameraScanIntervalSeconds: Int = 2,
+    cameraScanIntervalMinutes: Int = 1,
     onCameraScanIntervalChange: (Int) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
@@ -150,7 +150,7 @@ fun FridgeScreen(
                 onSave = onSaveSettings,
                 onFindCamera = onFindCamera,
                 cameraSearching = state.cameraSearching,
-                cameraScanIntervalSeconds = cameraScanIntervalSeconds,
+                cameraScanIntervalMinutes = cameraScanIntervalMinutes,
                 onCameraScanIntervalChange = onCameraScanIntervalChange
             )
             MainTab.DEBUG -> DebugPanel(
@@ -491,6 +491,7 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit, onEdit: ()
             Column(modifier = Modifier.weight(1f)) {
                 Text(product.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text("${product.quantity} шт. · ${product.category}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Text("Добавлено: " + SimpleDateFormat("dd MMM, HH:mm", Locale("ru")).format(Date(product.addedAt)), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                 Spacer(Modifier.height(9.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f).height(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
@@ -702,7 +703,7 @@ private fun SettingsPanel(
     onSave: () -> Unit,
     onFindCamera: () -> Unit,
     cameraSearching: Boolean,
-    cameraScanIntervalSeconds: Int,
+    cameraScanIntervalMinutes: Int,
     onCameraScanIntervalChange: (Int) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -745,13 +746,29 @@ private fun SettingsPanel(
                 Text("Адрес сохраняется на устройстве и используется центральной кнопкой сканирования.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp)
             }
         }
+        var intervalInput by remember(cameraScanIntervalMinutes) { mutableStateOf(cameraScanIntervalMinutes.toString()) }
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Интервал кадров", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text("Пауза между повторными снимками при сканировании", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                Slider(value = cameraScanIntervalSeconds.toFloat(), onValueChange = { onCameraScanIntervalChange(it.toInt().coerceIn(1, 10)) }, valueRange = 1f..10f, steps = 8)
-                Text("Каждые $cameraScanIntervalSeconds сек.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text("Чтобы сохранить интервал, нажми «Сохранить» в блоке камеры выше.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                Text("Интервал между снимками", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Укажи паузу в минутах между кадрами при сканировании камеры.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                OutlinedTextField(
+                    value = intervalInput,
+                    onValueChange = { value ->
+                        val digits = value.filter(Char::isDigit).take(4)
+                        intervalInput = digits
+                        digits.toIntOrNull()?.takeIf { it in 1..1440 }?.let(onCameraScanIntervalChange)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Интервал, минут") },
+                    placeholder = { Text("Например, 5") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    supportingText = { Text("Допустимое значение: от 1 до 1440 минут") },
+                    isError = intervalInput.toIntOrNull()?.let { it !in 1..1440 } ?: true,
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Text("Сейчас: $cameraScanIntervalMinutes мин.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Нажми «Сохранить» в блоке камеры, чтобы применить настройку.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             }
         }
     }
