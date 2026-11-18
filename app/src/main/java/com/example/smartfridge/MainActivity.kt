@@ -185,6 +185,11 @@ private fun SmartFridgeContent(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val shoppingItems = remember {
+        mutableStateListOf<String>().apply {
+            addAll(preferences.getStringSet("smartfridge_shopping_list", emptySet()).orEmpty().sorted())
+        }
+    }
 
     DisposableEffect(viewModel) {
         onDispose { viewModel.dispose() }
@@ -263,6 +268,15 @@ private fun SmartFridgeContent(
         onCameraScanIntervalChange = {
             cameraScanIntervalMinutes = it.coerceIn(1, 1440)
             preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
+        },
+        shoppingItems = shoppingItems,
+        onAddShoppingItem = { name ->
+            if (shoppingItems.none { it.equals(name, ignoreCase = true) }) shoppingItems.add(name)
+            preferences.edit().putStringSet("smartfridge_shopping_list", shoppingItems.toSet()).apply()
+        },
+        onRemoveShoppingItem = { name ->
+            shoppingItems.remove(name)
+            preferences.edit().putStringSet("smartfridge_shopping_list", shoppingItems.toSet()).apply()
         }
     )
 
