@@ -26,6 +26,7 @@ data class FridgeUiState(
     val scanning: Boolean = false,
     val lastImage: Bitmap? = null,
     val pendingProducts: List<RecognizedProduct> = emptyList(),
+    val previewDetections: List<RecognizedProduct> = emptyList(),
     val message: String? = null
 )
 
@@ -39,6 +40,7 @@ class FridgeViewModel(
     private val scanning = MutableStateFlow(false)
     private val lastImage = MutableStateFlow<Bitmap?>(null)
     private val pendingProducts = MutableStateFlow<List<RecognizedProduct>>(emptyList())
+    private val previewDetections = MutableStateFlow<List<RecognizedProduct>>(emptyList())
     private val message = MutableStateFlow<String?>(null)
     private val suggestions = MutableStateFlow<List<ProductCatalogEntity>>(emptyList())
     private var disposed = false
@@ -52,14 +54,14 @@ class FridgeViewModel(
     }
 
     private val cameraState = combine(
-        combine(cameraConnected, cameraSearching, scanning, lastImage, pendingProducts) {
-                connected, searching, scanningNow, image, pending ->
+        combine(cameraConnected, scanning, lastImage, pendingProducts, previewDetections) {
+                connected, scanningNow, image, pending, detections ->
             FridgeUiState(
                 cameraConnected = connected,
-                cameraSearching = searching,
                 scanning = scanningNow,
                 lastImage = image,
-                pendingProducts = pending
+                pendingProducts = pending,
+                previewDetections = detections
             )
         },
         message
@@ -76,6 +78,7 @@ class FridgeViewModel(
             scanning = camera.scanning,
             lastImage = camera.lastImage,
             pendingProducts = camera.pendingProducts,
+            previewDetections = camera.previewDetections,
             message = camera.message
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FridgeUiState())
@@ -96,6 +99,7 @@ class FridgeViewModel(
         viewModelScope.launch {
             scanning.value = true
             pendingProducts.value = emptyList()
+            previewDetections.value = emptyList()
             val recognizedByName = linkedMapOf<String, RecognizedProduct>()
             try {
                 // The current camera firmware exposes /capture (single JPEG), not an
@@ -111,6 +115,7 @@ class FridgeViewModel(
                     } else {
                         lastImage.value = bitmap
                         val frameProducts = repository.analyze(bitmap)
+                        previewDetections.value = frameProducts
                         frameProducts.forEach { item ->
                             val key = item.name.trim().lowercase()
                             val previous = recognizedByName[key]
