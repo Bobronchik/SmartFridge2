@@ -2,6 +2,7 @@
 package com.example.smartfridge
 
 import android.os.Bundle
+import android.content.SharedPreferences
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -33,15 +34,28 @@ class MainActivity : ComponentActivity() {
         OpenCVLoader.initLocal()
 
         setContent {
-            SmartFridgeTheme {
-                SmartFridgeRoot()
+            val preferences = getSharedPreferences("smartfridge_settings", MODE_PRIVATE)
+            var darkTheme by remember { mutableStateOf(preferences.getBoolean("dark_theme", false)) }
+            SmartFridgeTheme(darkTheme = darkTheme) {
+                SmartFridgeRoot(
+                    preferences = preferences,
+                    darkTheme = darkTheme,
+                    onThemeChange = { enabled ->
+                        darkTheme = enabled
+                        preferences.edit().putBoolean("dark_theme", enabled).apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SmartFridgeRoot() {
+private fun SmartFridgeRoot(
+    preferences: SharedPreferences,
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
+) {
 
     val context = LocalContext.current
 
@@ -132,30 +146,26 @@ private fun SmartFridgeRoot() {
         FridgeViewModel(repo)
     }
 
-    SmartFridgeContent(fridgeViewModel)
+    SmartFridgeContent(fridgeViewModel, preferences, darkTheme, onThemeChange)
 }
 
 @Composable
 private fun SmartFridgeContent(
-    viewModel: FridgeViewModel
+    viewModel: FridgeViewModel,
+    preferences: SharedPreferences,
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
 ) {
 
     val state by viewModel.uiState.collectAsState()
     val suggestions by viewModel.productSuggestions.collectAsState()
+    val catalog by viewModel.productCatalog.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var connected by remember {
-        mutableStateOf(false)
-    }
-
-    var searching by remember {
-        mutableStateOf(false)
-    }
-
     var cameraAddress by remember {
-        mutableStateOf<String?>(null)
+        mutableStateOf(preferences.getString("camera_address", "") ?: "")
     }
 
     var showAddDialog by remember {
@@ -174,23 +184,44 @@ private fun SmartFridgeContent(
         },
 
         onScan = {
-            val address = cameraAddress
-            if (address != null) {
+            val address = cameraAddress.trim()
+            if (address.isNotBlank()) {
                 viewModel.scan(address)
             } else {
-                viewModel.setMessage("Камера не подключена. Добавляй продукты вручную или настрой камеру позже.")
+                viewModel.setMessage("Укажи адрес камеры в настройках.")
             }
         },
 
         onAdd = {
             showAddDialog = true
         },
-        onDelete = viewModel::deleteProduct
+        onDelete = viewModel::deleteProduct,
+        darkTheme = darkTheme,
+        onThemeChange = onThemeChange,
+        cameraAddress = cameraAddress,
+        onCameraAddressChange = { cameraAddress = it },
+        onSaveSettings = {
+            preferences.edit().putString("camera_address", cameraAddress.trim()).apply()
+            viewModel.setMessage("Настройки камеры сохранены")
+        },
+        onFindCamera = {
+            scope.launch {
+                viewModel.setMessage("Ищем камеру в локальной сети…")
+                val found = withContext(Dispatchers.IO) { discoverCamera(context) }
+                if (found != null) {
+                    cameraAddress = found
+                    preferences.edit().putString("camera_address", found).apply()
+                    viewModel.setMessage("Камера найдена: $found")
+                } else {
+                    viewModel.setMessage("Камера не найдена. Проверь, что телефон и камера в одной сети.")
+                }
+            }
+        }
     )
 
     if (showAddDialog) {
         AddProductDialog(
-            suggestions = suggestions,
+            suggestions = catalog,
 
             onSearch = {
                 viewModel.searchCatalog(it)
