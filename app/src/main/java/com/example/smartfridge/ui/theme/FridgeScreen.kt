@@ -52,10 +52,10 @@ fun FridgeScreen(
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
 
-    val expiringCount = state.products.count {
+    val expiringCount = state.allProducts.count {
         getFreshness(it.expiresAt) == Freshness.EXPIRING_SOON
     }
-    val expiredCount = state.products.count {
+    val expiredCount = state.allProducts.count {
         getFreshness(it.expiresAt) == Freshness.EXPIRED
     }
 
@@ -115,7 +115,7 @@ fun FridgeScreen(
             )
             MainTab.RECIPES -> ExpiringRecipesPanel(
                 padding = scaffoldPadding,
-                products = state.products
+                products = state.allProducts
             )
             MainTab.SETTINGS -> SettingsPanel(
                 padding = scaffoldPadding,
@@ -201,14 +201,14 @@ private fun FridgeHome(
                     Text("МОЙ ЗАПАС", color = Color.White.copy(alpha = .78f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
                     Spacer(Modifier.height(7.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(state.products.size.toString(), color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
+                        Text(state.allProducts.size.toString(), color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(8.dp))
                         Text("продуктов", color = Color.White.copy(alpha = .9f), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         StatPill("⏳", "$expiringCount скоро", Color.White.copy(alpha = .18f))
-                        StatPill("✓", "${state.products.size - expiringCount - expiredCount} свежих", Color.White.copy(alpha = .18f))
+                        StatPill("✓", "${state.allProducts.size - expiringCount - expiredCount} свежих", Color.White.copy(alpha = .18f))
                     }
                 }
             }
