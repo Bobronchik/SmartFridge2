@@ -78,7 +78,7 @@ fun FridgeScreen(
         floatingActionButtonPosition = FabPosition.Center,
         bottomBar = {
             NavigationBar(
-                containerColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = Mint,
                 tonalElevation = 8.dp
             ) {
@@ -186,8 +186,8 @@ private fun FridgeHome(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("SMARTFRIDGE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Spacer(Modifier.height(5.dp))
-                    Text("Твой холодильник", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                    Text("Всё свежее — под контролем", color = Muted, fontSize = 13.sp)
+                    Text("Твой холодильник", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                    Text("Всё свежее — под контролем", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 }
                 Box(
                     modifier = Modifier.size(46.dp).clip(CircleShape).background(MintSoft),
@@ -256,8 +256,8 @@ private fun FridgeHome(
                 leadingIcon = { Text("⌕", color = Muted, fontSize = 22.sp) },
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedBorderColor = Color(0xFFE8ECE7),
                     focusedBorderColor = Mint
                 )
@@ -342,7 +342,7 @@ private fun SmallMetric(
     tint: Color,
     valueColor: Color
 ) {
-    Surface(modifier = modifier, color = CardWhite, shape = RoundedCornerShape(20.dp)) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(15.dp)) {
             Box(Modifier.size(32.dp).clip(RoundedCornerShape(11.dp)).background(tint), contentAlignment = Alignment.Center) {
                 Text(icon, fontSize = 15.sp)
@@ -383,7 +383,7 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
     }
     val expiry = SimpleDateFormat("dd MMM", Locale("ru")).format(Date(product.expiresAt))
 
-    Surface(color = Color.White, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xFFF4F6F1)),
