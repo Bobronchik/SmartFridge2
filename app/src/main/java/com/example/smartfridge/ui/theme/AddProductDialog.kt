@@ -24,10 +24,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.smartfridge.data.ProductCatalogEntity
 import java.util.Calendar
 
-private val PickerMint = Color(0xFF348A69)
-private val PickerPale = Color(0xFFE8F4ED)
-private val PickerInk = Color(0xFF20332A)
-private val PickerMuted = Color(0xFF839189)
 
 @Composable
 fun AddProductDialog(
@@ -58,7 +54,7 @@ fun AddProductDialog(
         ) {
             Column(Modifier.fillMaxWidth()) {
                 Box(
-                    Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF2E8968), Color(0xFF69B88E))))
+                    Modifier.fillMaxWidth().background(Brush.linearGradient(if (MaterialTheme.colorScheme.background == Color(0xFF121316)) listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface) else listOf(Color(0xFF2E8968), Color(0xFF69B88E))))
                         .padding(horizontal = 22.dp, vertical = 20.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -81,9 +77,9 @@ fun AddProductDialog(
                         value = query, onValueChange = { query = it; onSearch(it) },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                         placeholder = { Text("Поиск продукта…") },
-                        leadingIcon = { Text("⌕", fontSize = 22.sp, color = PickerMuted) },
+                        leadingIcon = { Text("⌕", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PickerMint, unfocusedBorderColor = Color(0xFFE5EBE6))
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = Color(0xFFE5EBE6))
                     )
                     Text(if (customMode) "Свой продукт" else "Выбери продукт", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     if (!customMode) {
@@ -92,7 +88,7 @@ fun AddProductDialog(
                                 val active = selected?.id == product.id
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
-                                        .background(if (active) PickerPale else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
+                                        .background(if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
                                         .clickable { selected = product; expiryDays = product.defaultShelfLifeDays.toString() }
                                         .padding(horizontal = 13.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -102,14 +98,14 @@ fun AddProductDialog(
                                     }
                                     Spacer(Modifier.width(11.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(product.name, color = PickerInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                        Text(product.category, color = PickerMuted, fontSize = 10.sp)
+                                        Text(product.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(product.category, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                     }
-                                    if (active) Text("✓", color = PickerMint, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                    if (active) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 }
                             }
                             if (filtered.isEmpty()) item {
-                                Text("В каталоге ничего не найдено. Можно добавить свой продукт.", color = PickerMuted, fontSize = 12.sp)
+                                Text("В каталоге ничего не найдено. Можно добавить свой продукт.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
                         }
                         Row(
@@ -118,13 +114,13 @@ fun AddProductDialog(
                                 .padding(13.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                                Text("＋", color = PickerMint, fontSize = 22.sp)
+                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                                Text("＋", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp)
                             }
                             Spacer(Modifier.width(11.dp))
                             Column {
-                                Text("Другое", color = PickerInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Вписать название вручную", color = PickerMuted, fontSize = 10.sp)
+                                Text("Другое", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Вписать название вручную", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                             }
                         }
                     } else {
@@ -134,7 +130,7 @@ fun AddProductDialog(
                             label = { Text("Название продукта") }, placeholder = { Text("Например, тофу") },
                             shape = RoundedCornerShape(15.dp)
                         )
-                        TextButton(onClick = { customMode = false }) { Text("← Вернуться к каталогу", color = PickerMint) }
+                        TextButton(onClick = { customMode = false }) { Text("← Вернуться к каталогу", color = MaterialTheme.colorScheme.primary) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
@@ -149,8 +145,8 @@ fun AddProductDialog(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = exact, onCheckedChange = { exact = it }, colors = CheckboxDefaults.colors(checkedColor = PickerMint))
-                        Text("Срок годности указан точно", color = PickerMuted, fontSize = 12.sp)
+                        Checkbox(checked = exact, onCheckedChange = { exact = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
+                        Text("Срок годности указан точно", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                 }
                 Row(
@@ -173,7 +169,7 @@ fun AddProductDialog(
                         enabled = if (customMode) customName.isNotBlank() else selected != null,
                         modifier = Modifier.weight(1.25f).height(48.dp),
                         shape = RoundedCornerShape(15.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PickerMint)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) { Text("Добавить", fontWeight = FontWeight.SemiBold) }
                 }
             }
