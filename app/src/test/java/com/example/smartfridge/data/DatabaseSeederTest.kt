@@ -12,16 +12,13 @@ class DatabaseSeederTest {
         assertTrue(
             names.containsAll(
                 listOf(
-                    "Алкоголь",
                     "Конфеты",
                     "Консервы",
                     "Шоколад",
                     "Десерт",
-                    "Сушёные продукты",
                     "Сухофрукты",
                     "Напитки",
                     "Жвачка",
-                    "Растворимые напитки",
                     "Лапша быстрого приготовления",
                     "Молоко",
                     "Снеки",
@@ -38,6 +35,9 @@ class DatabaseSeederTest {
         assertFalse("Средства гигиены" in names)
         assertFalse("Канцелярия" in names)
         assertFalse("Бумажные салфетки" in names)
+        assertFalse("Алкоголь" in names)
+        assertFalse("Сушёные продукты" in names)
+        assertFalse("Растворимые напитки" in names)
     }
 
     @Test
