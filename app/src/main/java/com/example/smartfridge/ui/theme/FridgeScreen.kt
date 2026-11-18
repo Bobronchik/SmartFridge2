@@ -858,7 +858,7 @@ private fun ScanReviewDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let {
-                        onUpdate(currentIndex, currentProduct.name, it, currentProduct.isExactDate)
+                        onUpdate(currentIndex, currentProduct.name, it, true)
                     }
                     editingDateIndex = null
                 }) { Text("Выбрать") }
@@ -930,7 +930,10 @@ private fun EditProductDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { expiryDate = it }
+                    datePickerState.selectedDateMillis?.let {
+                        expiryDate = it
+                        exact = true
+                    }
                     showDatePicker = false
                 }) { Text("Выбрать") }
             },
