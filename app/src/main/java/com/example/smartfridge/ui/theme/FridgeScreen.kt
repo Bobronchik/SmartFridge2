@@ -940,6 +940,7 @@ private fun SettingsPanel(
             }
         }
         var intervalInput by remember(cameraScanIntervalMinutes) { mutableStateOf(cameraScanIntervalMinutes.toString()) }
+        var intervalSaved by remember { mutableStateOf(true) }
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Интервал между снимками", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -949,6 +950,7 @@ private fun SettingsPanel(
                     onValueChange = { value ->
                         val digits = value.filter { it.isDigit() }.take(4)
                         intervalInput = digits
+                        intervalSaved = false
                         digits.toIntOrNull()?.takeIf { it in 1..1440 }?.let(onCameraScanIntervalChange)
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -966,10 +968,10 @@ private fun SettingsPanel(
                         Text("Интервал сохраняется отдельно от адреса камеры.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     }
                     Button(
-                        onClick = onSaveInterval,
-                        enabled = intervalInput.toIntOrNull()?.let { it in 1..1440 } == true,
+                        onClick = { onSaveInterval(); intervalSaved = true },
+                        enabled = !intervalSaved && intervalInput.toIntOrNull()?.let { it in 1..1440 } == true,
                         shape = RoundedCornerShape(12.dp)
-                    ) { Text("Сохранить") }
+                    ) { Text(if (intervalSaved) "Сохранено" else "Сохранить") }
                 }
             }
         }
