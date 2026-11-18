@@ -23,6 +23,9 @@ class SmartFridgeRepository(
     val productCatalog: Flow<List<ProductCatalogEntity>> =
         productDao.observeAll()
 
+    val productCatalog: Flow<List<ProductCatalogEntity>> =
+        productDao.observeAll()
+
     val products: Flow<List<FridgeProduct>> =
         fridgeDao
             .observeAll()
