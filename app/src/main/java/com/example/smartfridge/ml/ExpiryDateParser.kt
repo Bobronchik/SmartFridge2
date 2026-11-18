@@ -6,18 +6,18 @@ import java.util.Locale
 object ExpiryDateParser {
     private val explicitExpiryPatterns = listOf(
         Regex(
-            """(?:срок\\s*годности|годен|годна|годно|употребить|употреблять)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
+            """(?:срок\s*годности|годен|годна|годно|употребить|употреблять)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
             RegexOption.IGNORE_CASE
         ),
         Regex(
-            """(?:exp(?:iry)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
+            """(?:exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""",
             RegexOption.IGNORE_CASE
         )
     )
 
     private val explicitMonthYearPatterns = listOf(
-        Regex("""(?:срок\\s*годности|годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE),
-        Regex("""(?:exp(?:iry)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE)
+        Regex("""(?:срок\s*годности|годен|годна|годно|употребить)\s*(?:до)?\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE),
+        Regex("""(?:exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)\s*:?\s*(\d{1,2})[./-](\d{4})""", RegexOption.IGNORE_CASE)
     )
 
     private val genericDatePattern = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})""")
@@ -26,7 +26,7 @@ object ExpiryDateParser {
         RegexOption.IGNORE_CASE
     )
     private val explicitExpiryMarker = Regex(
-        """(годен|годна|годно|употребить|exp(?:iry)?|best\s*before|use\s*by)""",
+        """(срок\s*годности|годен|годна|годно|употребить|exp(?:iry)?(?:\s*date)?|best\s*before|use\s*by)""",
         RegexOption.IGNORE_CASE
     )
 
@@ -66,16 +66,9 @@ object ExpiryDateParser {
     private fun lastDayOfMonth(month: Int, year: Int): Int? {
         if (month !in 1..12 || year !in 2000..2200) return null
         return Calendar.getInstance(Locale.ROOT).apply {
-            isLenient = false
             clear()
             set(year, month - 1, 1)
-        }.let { calendar ->
-            try {
-                calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-            } catch (_: Exception) {
-                null
-            }
-        }
+        }.getActualMaximum(Calendar.DAY_OF_MONTH)
     }
 
     private fun createDate(day: Int?, month: Int, year: Int): Long? {
