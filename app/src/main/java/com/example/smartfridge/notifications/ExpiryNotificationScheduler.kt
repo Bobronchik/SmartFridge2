@@ -1,6 +1,9 @@
 package com.example.smartfridge.notifications
 
 import android.content.Context
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -12,6 +15,20 @@ object ExpiryNotificationScheduler {
 
     const val CHANNEL_ID = "expiry_reminders"
     private const val WORK_NAME = "smartfridge_expiry_reminders"
+
+    fun createNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Срок годности продуктов",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Напоминания о продуктах, срок годности которых скоро истекает"
+            }
+            context.getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
+        }
+    }
 
     fun schedule(context: Context) {
         val constraints = Constraints.Builder()
