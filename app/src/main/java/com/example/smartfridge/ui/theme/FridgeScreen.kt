@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.example.smartfridge.ml.RecognizedProduct
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +51,13 @@ fun FridgeScreen(
     cameraAddress: String = "",
     onCameraAddressChange: (String) -> Unit = {},
     onSaveSettings: () -> Unit = {},
-    onFindCamera: () -> Unit = {}
+    onFindCamera: () -> Unit = {},
+    onConfirmScan: () -> Unit = {},
+    onDismissScan: () -> Unit = {},
+    onUpdatePendingProduct: (Int, String, Long, Boolean) -> Unit = { _, _, _, _ -> },
+    onRemovePendingProduct: (Int) -> Unit = {},
+    cameraScanIntervalSeconds: Int = 2,
+    onCameraScanIntervalChange: (Int) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
@@ -125,7 +134,9 @@ fun FridgeScreen(
                 cameraAddress = cameraAddress,
                 onCameraAddressChange = onCameraAddressChange,
                 onSave = onSaveSettings,
-                onFindCamera = onFindCamera
+                onFindCamera = onFindCamera,
+                cameraScanIntervalSeconds = cameraScanIntervalSeconds,
+                onCameraScanIntervalChange = onCameraScanIntervalChange
             )
             MainTab.DEBUG -> DebugPanel(
                 padding = scaffoldPadding,
@@ -134,6 +145,16 @@ fun FridgeScreen(
                 expiredCount = expiredCount
             )
         }
+    }
+
+    if (state.pendingProducts.isNotEmpty()) {
+        ScanReviewDialog(
+            products = state.pendingProducts,
+            onConfirm = onConfirmScan,
+            onDismiss = onDismissScan,
+            onUpdate = onUpdatePendingProduct,
+            onRemove = onRemovePendingProduct
+        )
     }
 
     productToDelete?.let { product ->
@@ -241,6 +262,20 @@ private fun FridgeHome(
                     tint = MaterialTheme.colorScheme.errorContainer,
                     valueColor = MaterialTheme.colorScheme.error
                 )
+            }
+        }
+
+        if (state.lastImage != null) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Последний кадр камеры", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Image(
+                        bitmap = state.lastImage.asImageBitmap(),
+                        contentDescription = "Последний снимок с камеры",
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).clip(RoundedCornerShape(18.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
         }
 
@@ -675,7 +710,9 @@ private fun SettingsPanel(
     cameraAddress: String,
     onCameraAddressChange: (String) -> Unit,
     onSave: () -> Unit,
-    onFindCamera: () -> Unit
+    onFindCamera: () -> Unit,
+    cameraScanIntervalSeconds: Int,
+    onCameraScanIntervalChange: (Int) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("ПЕРСОНАЛИЗАЦИЯ", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
@@ -702,6 +739,14 @@ private fun SettingsPanel(
                     Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("Сохранить") }
                 }
                 Text("Адрес сохраняется на устройстве и используется центральной кнопкой сканирования.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+        }
+        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Интервал кадров", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Пауза между повторными снимками при сканировании", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Slider(value = cameraScanIntervalSeconds.toFloat(), onValueChange = { onCameraScanIntervalChange(it.toInt().coerceIn(1, 10)) }, valueRange = 1f..10f, steps = 8)
+                Text("Каждые $cameraScanIntervalSeconds сек.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -743,6 +788,100 @@ private fun DebugRow(label: String, value: String, ok: Boolean) {
             Spacer(Modifier.width(10.dp))
             Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScanReviewDialog(
+    products: List<RecognizedProduct>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    onUpdate: (Int, String, Long, Boolean) -> Unit,
+    onRemove: (Int) -> Unit
+) {
+    var editingDateIndex by remember { mutableStateOf<Int?>(null) }
+    val currentIndex = editingDateIndex
+    val currentProduct = currentIndex?.let { products.getOrNull(it) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = currentProduct?.expiresAt ?: System.currentTimeMillis()
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Проверь распознавание")
+                Text("Перед сохранением можно исправить название и дату.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.heightIn(max = 430.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    items(products.size) { index ->
+                        val product = products[index]
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(product.icon, fontSize = 22.sp)
+                                    Spacer(Modifier.width(8.dp))
+                                    OutlinedTextField(
+                                        value = product.name,
+                                        onValueChange = { onUpdate(index, it, product.expiresAt, product.isExactDate) },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        label = { Text("Название") }
+                                    )
+                                    TextButton(onClick = { onRemove(index) }) {
+                                        Text("Убрать", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                    }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = {
+                                        editingDateIndex = index
+                                    }) {
+                                        Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(product.expiresAt)))
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    Text(if (product.isExactDate) "С упаковки" else "Примерный срок", color = if (product.isExactDate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary, fontSize = 10.sp)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = product.isExactDate,
+                                        onCheckedChange = { onUpdate(index, product.name, product.expiresAt, it) }
+                                    )
+                                    Text("Дата точно считана с упаковки", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (products.isEmpty()) Text("Нет продуктов для добавления.")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm, enabled = products.isNotEmpty()) { Text("Добавить в холодильник") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+
+    if (currentIndex != null && currentProduct != null) {
+        DatePickerDialog(
+            onDismissRequest = { editingDateIndex = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let {
+                        onUpdate(currentIndex, currentProduct.name, it, currentProduct.isExactDate)
+                    }
+                    editingDateIndex = null
+                }) { Text("Выбрать") }
+            },
+            dismissButton = { TextButton(onClick = { editingDateIndex = null }) { Text("Отмена") } }
+        ) {
+            DatePicker(state = datePickerState, showModeToggle = false)
         }
     }
 }
