@@ -123,13 +123,23 @@ fun buildExpiringRecipes(
     products: List<FridgeProduct>,
     now: Long = System.currentTimeMillis()
 ): List<ExpiringRecipeSuggestion> {
-    val limit = Calendar.getInstance().apply {
+    val startOfToday = Calendar.getInstance().apply {
         timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val limit = (startOfToday.clone() as Calendar).apply {
         add(Calendar.DAY_OF_YEAR, 2)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
     }.timeInMillis
 
     val expiring = products.filter {
-        it.expiresAt > now && it.expiresAt <= limit
+        it.expiresAt >= startOfToday.timeInMillis && it.expiresAt <= limit
     }.sortedBy { it.expiresAt }
 
     if (expiring.isEmpty()) return emptyList()
