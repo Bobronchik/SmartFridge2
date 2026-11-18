@@ -110,6 +110,13 @@ class FridgeViewModel(
     val productSuggestions: StateFlow<List<ProductCatalogEntity>> =
         suggestions.asStateFlow()
 
+    val productCatalog: StateFlow<List<ProductCatalogEntity>> =
+        repository.productCatalog.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     fun setSearch(value: String) {
         search.value = value
     }
