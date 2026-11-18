@@ -1,4 +1,3 @@
-
 package com.example.smartfridge.ui
 
 import android.graphics.Bitmap
@@ -6,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smartfridge.data.ProductCatalogEntity
 import com.example.smartfridge.domain.FridgeProduct
+import com.example.smartfridge.ml.RecognizedProduct
 import com.example.smartfridge.repository.SmartFridgeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,74 +24,45 @@ data class FridgeUiState(
     val cameraSearching: Boolean = false,
     val scanning: Boolean = false,
     val lastImage: Bitmap? = null,
+    val pendingProducts: List<RecognizedProduct> = emptyList(),
     val message: String? = null
 )
 
 class FridgeViewModel(
     private val repository: SmartFridgeRepository
 ) : ViewModel() {
-
     private val search = MutableStateFlow("")
-
     private val category = MutableStateFlow<String?>(null)
-
     private val cameraConnected = MutableStateFlow(false)
-
     private val cameraSearching = MutableStateFlow(false)
-
     private val scanning = MutableStateFlow(false)
-
     private val lastImage = MutableStateFlow<Bitmap?>(null)
-
+    private val pendingProducts = MutableStateFlow<List<RecognizedProduct>>(emptyList())
     private val message = MutableStateFlow<String?>(null)
+    private val suggestions = MutableStateFlow<List<ProductCatalogEntity>>(emptyList())
 
-    private val suggestions =
-        MutableStateFlow<List<ProductCatalogEntity>>(emptyList())
-
-    private val productFilters = combine(
-        repository.products,
-        search,
-        category
-    ) { products, query, selectedCategory ->
-
+    private val productFilters = combine(repository.products, search, category) { products, query, selectedCategory ->
         val filtered = products.filter { product ->
-
-            val matchesSearch =
-                query.isBlank() ||
-                        product.name.contains(query, ignoreCase = true)
-
-            val matchesCategory =
-                selectedCategory == null ||
-                        product.category == selectedCategory
-
-            matchesSearch && matchesCategory
+            (query.isBlank() || product.name.contains(query, ignoreCase = true)) &&
+                (selectedCategory == null || product.category == selectedCategory)
         }
-
         Triple(filtered, query, selectedCategory) to products
     }
 
     private val cameraState = combine(
-        cameraConnected,
-        cameraSearching,
-        scanning,
-        lastImage,
-        message
-    ) { connected, searching, scanningNow, image, msg ->
-
+        cameraConnected, cameraSearching, scanning, lastImage, pendingProducts, message
+    ) { connected, searching, scanningNow, image, pending, msg ->
         FridgeUiState(
             cameraConnected = connected,
             cameraSearching = searching,
             scanning = scanningNow,
             lastImage = image,
+            pendingProducts = pending,
             message = msg
         )
     }
 
-    val uiState: StateFlow<FridgeUiState> = combine(
-        productFilters,
-        cameraState
-    ) { filters, camera ->
-
+    val uiState: StateFlow<FridgeUiState> = combine(productFilters, cameraState) { filters, camera ->
         FridgeUiState(
             products = filters.first.first,
             allProducts = filters.second,
@@ -101,106 +72,94 @@ class FridgeViewModel(
             cameraSearching = camera.cameraSearching,
             scanning = camera.scanning,
             lastImage = camera.lastImage,
+            pendingProducts = camera.pendingProducts,
             message = camera.message
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = FridgeUiState()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FridgeUiState())
+
+    val productSuggestions: StateFlow<List<ProductCatalogEntity>> = suggestions.asStateFlow()
+    val productCatalog: StateFlow<List<ProductCatalogEntity>> = repository.productCatalog.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
     )
 
-    val productSuggestions: StateFlow<List<ProductCatalogEntity>> =
-        suggestions.asStateFlow()
-
-    val productCatalog: StateFlow<List<ProductCatalogEntity>> =
-        repository.productCatalog.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    fun setSearch(value: String) {
-        search.value = value
-    }
-
-    fun setCategory(value: String?) {
-        category.value = value
-    }
-
-    fun setCameraConnected(value: Boolean) {
-        cameraConnected.value = value
-    }
-
-    fun setCameraSearching(value: Boolean) {
-        cameraSearching.value = value
-    }
-
-    fun setScanning(value: Boolean) {
-        scanning.value = value
-    }
-
-    fun setImage(bitmap: Bitmap?) {
-        lastImage.value = bitmap
-    }
-
-    fun setMessage(value: String?) {
-        message.value = value
-    }
+    fun setSearch(value: String) { search.value = value }
+    fun setCategory(value: String?) { category.value = value }
+    fun setCameraConnected(value: Boolean) { cameraConnected.value = value }
+    fun setCameraSearching(value: Boolean) { cameraSearching.value = value }
+    fun setMessage(value: String?) { message.value = value }
 
     fun scan(address: String) {
+        if (scanning.value) return
         viewModelScope.launch {
             scanning.value = true
-            message.value = "Проверяем содержимое холодильника…"
-
+            pendingProducts.value = emptyList()
+            message.value = "Получаем снимок и распознаём продукты…"
             try {
                 val bitmap = repository.capture(address)
-
                 if (bitmap == null) {
-                    message.value =
-                        "Не удалось получить снимок. Проверьте подключение камеры."
+                    message.value = "Не удалось получить снимок. Проверьте адрес и подключение камеры."
                     return@launch
                 }
-
                 lastImage.value = bitmap
-
-                repository.analyze(bitmap)
-
-                message.value = "Холодильник обновлён"
-
+                val recognized = repository.analyze(bitmap)
+                if (recognized.isEmpty()) {
+                    message.value = "Продукты не распознаны. Попробуйте изменить освещение или положение камеры."
+                } else {
+                    pendingProducts.value = recognized
+                    message.value = "Проверьте распознанные продукты перед добавлением."
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
-                message.value =
-                    "Не удалось распознать продукты. Попробуйте ещё раз."
+                android.util.Log.e("FridgeViewModel", "Camera scan failed", e)
+                message.value = "Не удалось распознать продукты. Подробности доступны в Logcat."
             } finally {
                 scanning.value = false
             }
         }
     }
 
-    fun addProduct(
-        name: String,
-        category: String,
-        icon: String,
-        quantity: Float,
-        expiresAt: Long,
-        exact: Boolean
-    ) {
+    fun updatePendingProduct(index: Int, name: String, expiresAt: Long, isExactDate: Boolean) {
+        val current = pendingProducts.value.toMutableList()
+        if (index !in current.indices || name.isBlank()) return
+        current[index] = current[index].copy(
+            name = name.trim(),
+            expiresAt = expiresAt,
+            isExactDate = isExactDate
+        )
+        pendingProducts.value = current
+    }
+
+    fun removePendingProduct(index: Int) {
+        pendingProducts.value = pendingProducts.value.filterIndexed { itemIndex, _ -> itemIndex != index }
+    }
+
+    fun dismissScanReview() {
+        pendingProducts.value = emptyList()
+        message.value = "Результаты сканирования отменены"
+    }
+
+    fun confirmScanReview() {
+        val approved = pendingProducts.value.toList()
+        if (approved.isEmpty()) return
         viewModelScope.launch {
             try {
-                repository.addProduct(
-                    name,
-                    category,
-                    icon,
-                    quantity,
-                    expiresAt,
-                    exact
-                )
-
-                message.value = "$name добавлен в холодильник"
-
+                repository.saveRecognizedProducts(approved)
+                pendingProducts.value = emptyList()
+                message.value = "Добавлено продуктов: ${approved.size}"
             } catch (e: Exception) {
-                e.printStackTrace()
-                message.value = "Не удалось добавить продукт"
+                android.util.Log.e("FridgeViewModel", "Saving scan review failed", e)
+                message.value = "Не удалось сохранить распознанные продукты."
+            }
+        }
+    }
+
+    fun addProduct(name: String, category: String, icon: String, quantity: Float, expiresAt: Long, exact: Boolean) {
+        viewModelScope.launch {
+            try {
+                repository.addProduct(name, category, icon, quantity, expiresAt, exact)
+                message.value = "$name добавлен в холодильник"
+            } catch (e: Exception) {
+                android.util.Log.e("FridgeViewModel", "Adding product failed", e)
+                message.value = e.message ?: "Не удалось добавить продукт"
             }
         }
     }
@@ -211,7 +170,7 @@ class FridgeViewModel(
                 repository.deleteProduct(product)
                 message.value = "${product.name} удалён"
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("FridgeViewModel", "Deleting product failed", e)
                 message.value = "Не удалось удалить продукт"
             }
         }
@@ -219,16 +178,18 @@ class FridgeViewModel(
 
     fun searchCatalog(query: String) {
         viewModelScope.launch {
-            try {
-                suggestions.value = if (query.isBlank()) {
-                    emptyList()
-                } else {
-                    repository.searchProducts(query)
-                }
+            suggestions.value = try {
+                if (query.isBlank()) emptyList() else repository.searchProducts(query)
             } catch (e: Exception) {
-                e.printStackTrace()
-                suggestions.value = emptyList()
+                android.util.Log.e("FridgeViewModel", "Catalog search failed", e)
+                emptyList()
             }
         }
+    }
+
+    override fun onCleared() {
+        lastImage.value?.let { if (!it.isRecycled) it.recycle() }
+        repository.close()
+        super.onCleared()
     }
 }
