@@ -68,12 +68,16 @@ fun FridgeScreen(
     onUpdatePendingProduct: (Int, String, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onRemovePendingProduct: (Int) -> Unit = {},
     cameraScanIntervalMinutes: Int = 1,
-    onCameraScanIntervalChange: (Int) -> Unit = {}
+    onCameraScanIntervalChange: (Int) -> Unit = {},
+    shoppingItems: List<String> = emptyList(),
+    onAddShoppingItem: (String) -> Unit = {},
+    onRemoveShoppingItem: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
     var productToEdit by remember { mutableStateOf<FridgeProduct?>(null) }
     var statusFilter by remember { mutableStateOf<Freshness?>(null) }
+    var showShoppingList by remember { mutableStateOf(false) }
 
     val expiringCount = state.allProducts.count {
         getFreshness(it.expiresAt) == Freshness.EXPIRING_SOON
@@ -141,7 +145,9 @@ fun FridgeScreen(
                 onEdit = { productToEdit = it },
                 onUpdateProduct = onUpdateProduct,
                 statusFilter = statusFilter,
-                onStatusFilterChange = { statusFilter = it }
+                onStatusFilterChange = { statusFilter = it },
+                shoppingItems = shoppingItems,
+                onOpenShoppingList = { showShoppingList = true }
             )
             MainTab.RECIPES -> ExpiringRecipesPanel(
                 padding = scaffoldPadding,
@@ -178,6 +184,10 @@ fun FridgeScreen(
         )
     }
 
+    if (showShoppingList) {
+        ShoppingListDialog(items = shoppingItems, onRemove = onRemoveShoppingItem, onDismiss = { showShoppingList = false })
+    }
+
     productToEdit?.let { product ->
         EditProductDialog(
             product = product,
@@ -195,10 +205,17 @@ fun FridgeScreen(
             title = { Text("Удалить продукт?") },
             text = { Text("«${product.name}» будет удалён из холодильника.") },
             confirmButton = {
-                TextButton(onClick = {
-                    onDelete(product)
-                    productToDelete = null
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        onDelete(product)
+                        productToDelete = null
+                    }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = {
+                        onAddShoppingItem(product.name)
+                        onDelete(product)
+                        productToDelete = null
+                    }) { Text("И в покупки", color = MaterialTheme.colorScheme.primary) }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { productToDelete = null }) { Text("Отмена") }
@@ -221,7 +238,9 @@ private fun FridgeHome(
     onEdit: (FridgeProduct) -> Unit,
     onUpdateProduct: (FridgeProduct) -> Unit,
     statusFilter: Freshness?,
-    onStatusFilterChange: (Freshness?) -> Unit
+    onStatusFilterChange: (Freshness?) -> Unit,
+    shoppingItems: List<String>,
+    onOpenShoppingList: () -> Unit
 ) {
     val visibleProducts = remember(state.products, statusFilter) {
         state.products.filter { statusFilter == null || getFreshness(it.expiresAt) == statusFilter }
@@ -358,7 +377,10 @@ private fun FridgeHome(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Продукты", color = MaterialTheme.colorScheme.onSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = onAdd) { Text("+ Добавить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onOpenShoppingList, contentPadding = PaddingValues(horizontal = 5.dp)) {
+                    Text("🛒 ${shoppingItems.size}", color = MaterialTheme.colorScheme.tertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+                TextButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 5.dp)) { Text("+ Добавить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
             }
             Spacer(Modifier.height(4.dp))
             OutlinedTextField(
@@ -456,6 +478,36 @@ private fun StatPill(icon: String, text: String, background: Color) {
     }
 }
 
+@Composable
+@Composable
+private fun ShoppingListDialog(items: List<String>, onRemove: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Список покупок") },
+        text = {
+            if (items.isEmpty()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                    Text("🛒", fontSize = 34.sp)
+                    Text("Пока ничего не нужно купить", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.heightIn(max = 360.dp)) {
+                    items.forEach { item ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(item, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { onRemove(item) }) { Text("Куплено", fontSize = 11.sp) }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+
+@Composable
 private fun EmptyFilterState(title: String, onClear: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
