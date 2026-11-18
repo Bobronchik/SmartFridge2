@@ -42,18 +42,32 @@ class ExpiryNotificationWorker(
                 .getExpiringBetween(startOfTomorrow.timeInMillis, limit)
 
             val manager = NotificationManagerCompat.from(applicationContext)
+            val notificationPrefs = applicationContext.getSharedPreferences(
+                "smartfridge_expiry_notifications",
+                Context.MODE_PRIVATE
+            )
             products.forEach { product ->
+                val daysRemaining = daysUntilExpiry(product.expiresAt, now)
+                if (daysRemaining !in 1..2) return@forEach
+
+                // A changed expiry date produces a new key; each 1-day/2-day reminder
+                // is delivered at most once for that specific product and expiry date.
+                val reminderKey = "product_${product.id}_${product.expiresAt}_${daysRemaining}"
+                if (notificationPrefs.getBoolean(reminderKey, false)) return@forEach
+
                 val remaining = remainingTime(product.expiresAt, now)
+                val expiryDate = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
+                    .format(java.util.Date(product.expiresAt))
                 val notification = NotificationCompat.Builder(
                     applicationContext,
                     ExpiryNotificationScheduler.CHANNEL_ID
                 )
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .setContentTitle("Скоро истекает срок: ${product.name}")
-                    .setContentText("Осталось: $remaining. Используйте продукт вовремя.")
+                    .setContentText("До $expiryDate: $remaining. Используйте продукт вовремя.")
                     .setStyle(
                         NotificationCompat.BigTextStyle().bigText(
-                            "${product.name}: осталось $remaining. Самое время приготовить блюдо."
+                            "${product.name}: срок годности $expiryDate, $remaining. Самое время приготовить блюдо."
                         )
                     )
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -61,10 +75,10 @@ class ExpiryNotificationWorker(
                     .build()
 
                 try {
-                    manager.notify(product.id.toInt(), notification)
+                    manager.notify(reminderKey.hashCode(), notification)
+                    notificationPrefs.edit().putBoolean(reminderKey, true).apply()
                 } catch (_: SecurityException) {
-                    // Android 13+: уведомления останутся выключенными, пока пользователь
-                    // не предоставит POST_NOTIFICATIONS в системном диалоге.
+                    // Do not mark the reminder as delivered until Android allows it.
                 }
             }
 
@@ -90,6 +104,18 @@ class ExpiryNotificationWorker(
             )
             manager.createNotificationChannel(channel)
         }
+    }
+
+    private fun daysUntilExpiry(expiresAt: Long, now: Long): Int {
+        fun dayStart(value: Long) = Calendar.getInstance().apply {
+            timeInMillis = value
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        return ((dayStart(expiresAt) - dayStart(now)) / 86_400_000L).toInt()
     }
 
     private fun remainingTime(expiresAt: Long, now: Long): String {
