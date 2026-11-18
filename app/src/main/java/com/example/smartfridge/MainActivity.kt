@@ -186,6 +186,10 @@ private fun SmartFridgeContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.dispose() }
+    }
+
     var cameraAddress by remember {
         mutableStateOf(preferences.getString("camera_address", "") ?: "")
     }
