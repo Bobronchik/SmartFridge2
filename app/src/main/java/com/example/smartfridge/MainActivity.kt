@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val preferences = getSharedPreferences("smartfridge_settings", MODE_PRIVATE)
-            var darkTheme by remember { mutableStateOf(preferences.getBoolean("dark_theme", false)) }
+            var darkTheme by remember { mutableStateOf(preferences.getBoolean("dark_theme", true)) }
             SmartFridgeTheme(darkTheme = darkTheme) {
                 SmartFridgeRoot(
                     preferences = preferences,
@@ -260,7 +260,10 @@ private fun SmartFridgeContent(
         onUpdatePendingProduct = viewModel::updatePendingProduct,
         onRemovePendingProduct = viewModel::removePendingProduct,
         cameraScanIntervalMinutes = cameraScanIntervalMinutes,
-        onCameraScanIntervalChange = { cameraScanIntervalMinutes = it.coerceIn(1, 1440) }
+        onCameraScanIntervalChange = {
+            cameraScanIntervalMinutes = it.coerceIn(1, 1440)
+            preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
+        }
     )
 
     if (showAddDialog) {
