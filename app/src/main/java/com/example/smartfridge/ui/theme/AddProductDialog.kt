@@ -52,13 +52,29 @@ fun AddProductDialog(
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = toDatePickerMillis(expiryDate))
     val filtered = remember(suggestions, query) {
         if (query.isBlank()) suggestions
-        else suggestions.filter { it.name.contains(query, ignoreCase = true) }
+        else suggestions.filter { it.name.contains(query.trim(), ignoreCase = true) }
     }
+    val parsedQuantity = quantity.replace(',', '.').toFloatOrNull()
     val dateLabel = remember(expiryDate) {
         SimpleDateFormat("dd MMM yyyy", Locale("ru")).format(Date(expiryDate))
     }
+    val productName = if (customMode) customName.trim() else selected?.name.orEmpty()
+    val canAdd = productName.isNotBlank() &&
+        parsedQuantity != null && parsedQuantity.isFinite() && parsedQuantity > 0f &&
+        expiryDate >= startOfTodayMillis()
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    fun changeQuantity(delta: Float) {
+        val current = parsedQuantity ?: 1f
+        val next = (current + delta).coerceAtLeast(0.1f)
+        quantity = if (next % 1f == 0f) next.toInt().toString()
+        else String.format(Locale.US, "%.2f", next).trimEnd('0').trimEnd('.')
+        validationError = null
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -71,22 +87,43 @@ fun AddProductDialog(
         ) {
             Column(Modifier.fillMaxWidth()) {
                 Box(
-                    Modifier.fillMaxWidth()
-                        .background(Brush.linearGradient(
-                            if (MaterialTheme.colorScheme.background == Color(0xFF121316))
-                                listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)
-                            else listOf(Color(0xFF2E8968), Color(0xFF69B88E))
-                        ))
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                if (MaterialTheme.colorScheme.background == Color(0xFF121316))
+                                    listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)
+                                else listOf(Color(0xFF2E8968), Color(0xFF69B88E))
+                            )
+                        )
                         .padding(horizontal = 22.dp, vertical = 20.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("МОЙ ХОЛОДИЛЬНИК", color = Color.White.copy(.75f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+                            Text(
+                                "МОЙ ХОЛОДИЛЬНИК",
+                                color = Color.White.copy(.75f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.6.sp
+                            )
                             Spacer(Modifier.height(5.dp))
-                            Text("Добавить продукт", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                            Text("Выбери продукт и проверь срок годности", color = Color.White.copy(.88f), fontSize = 12.sp)
+                            Text(
+                                "Добавить продукт",
+                                color = Color.White,
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Выбери продукт и проверь срок годности",
+                                color = Color.White.copy(.88f),
+                                fontSize = 12.sp
+                            )
                         }
-                        Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(.18f)), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text("🥑", fontSize = 25.sp)
                         }
                     }
@@ -97,23 +134,74 @@ fun AddProductDialog(
                         .weight(1f, fill = false)
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(11.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (!customMode) {
                         OutlinedTextField(
-                            value = query, onValueChange = { query = it; onSearch(it) },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            value = query,
+                            onValueChange = {
+                                query = it
+                                selected = null
+                                validationError = null
+                                onSearch(it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             placeholder = { Text("Поиск продукта…") },
-                            leadingIcon = { Text("⌕", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                            leadingIcon = {
+                                Text("⌕", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            },
+                            trailingIcon = {
+                                if (query.isNotEmpty()) {
+                                    TextButton(onClick = {
+                                        query = ""
+                                        selected = null
+                                        onSearch("")
+                                    }) { Text("Очистить") }
+                                }
+                            },
                             shape = RoundedCornerShape(16.dp)
                         )
-                        Text("Каталог продуктов", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 210.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Каталог продуктов",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${filtered.size} продуктов",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        LazyColumn(
+                            Modifier.fillMaxWidth().heightIn(max = 210.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
                             items(filtered, key = { it.id }) { product ->
                                 val active = selected?.id == product.id
                                 Row(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
-                                        .background(if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(15.dp))
+                                        .background(
+                                            if (active) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)
+                                        )
+                                        .then(
+                                            if (active) Modifier.border(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.primary,
+                                                RoundedCornerShape(15.dp)
+                                            ) else Modifier
+                                        )
                                         .clickable {
                                             selected = product
                                             expiryDate = Calendar.getInstance().apply {
@@ -121,76 +209,210 @@ fun AddProductDialog(
                                             }.timeInMillis
                                             datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate)
                                             exact = false
+                                            validationError = null
                                         }
                                         .padding(horizontal = 13.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
+                                    Box(
+                                        Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.surface),
+                                        contentAlignment = Alignment.Center
+                                    ) {
                                         Text(product.icon, fontSize = 22.sp)
                                     }
                                     Spacer(Modifier.width(11.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(product.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("${product.category} · примерно ${product.defaultShelfLifeDays} дн.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                        Text(
+                                            product.name,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            "${product.category} · примерно ${product.defaultShelfLifeDays} дн.",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 10.sp
+                                        )
                                     }
-                                    if (active) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                    if (active) {
+                                        Text(
+                                            "✓",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    }
                                 }
                             }
-                            if (filtered.isEmpty()) item {
-                                Text("Ничего не найдено. Можно добавить название вручную.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            if (filtered.isEmpty()) {
+                                item {
+                                    Text(
+                                        if (query.isBlank()) "Каталог пока пуст."
+                                        else "Ничего не найдено. Добавь продукт вручную ниже.",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                }
                             }
                         }
+
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { customMode = true; selected = null; customName = query }
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable {
+                                    customMode = true
+                                    selected = null
+                                    customName = query.trim()
+                                    validationError = null
+                                }
                                 .padding(13.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("＋", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp)
                             Spacer(Modifier.width(11.dp))
-                            Column {
-                                Text("Другой продукт", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Вписать название вручную", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Другой продукт",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Вписать название вручную",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
                             }
+                            Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 22.sp)
                         }
                     } else {
                         OutlinedTextField(
-                            value = customName, onValueChange = { customName = it },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            label = { Text("Название продукта") }, placeholder = { Text("Например, тофу") },
+                            value = customName,
+                            onValueChange = {
+                                customName = it
+                                validationError = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Название продукта") },
+                            placeholder = { Text("Например, тофу") },
                             shape = RoundedCornerShape(15.dp)
                         )
-                        TextButton(onClick = { customMode = false }) { Text("← Вернуться к каталогу") }
+                        TextButton(onClick = {
+                            customMode = false
+                            validationError = null
+                        }) { Text("← Вернуться к каталогу") }
                     }
 
-                    OutlinedTextField(
-                        value = quantity,
-                        onValueChange = { value -> quantity = value.filter { it.isDigit() || it == '.' || it == ',' }.take(8) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(min = 0.dp),
-                        singleLine = true,
-                        label = { Text("Количество (шт. или кг)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        shape = RoundedCornerShape(14.dp)
-                    )
+                    // Quantity is controlled with explicit +/- actions; no full-width
+                    // text-field underline or decorative divider below it.
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text(
+                            "Количество",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalButton(
+                                onClick = { changeQuantity(-1f) },
+                                modifier = Modifier.size(50.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) { Text("−", fontSize = 23.sp) }
+
+                            OutlinedTextField(
+                                value = quantity,
+                                onValueChange = { value ->
+                                    if (value.matches(Regex("^\\d*([.,]\\d*)?$"))) {
+                                        quantity = value
+                                        validationError = null
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                placeholder = { Text("1") },
+                                suffix = { Text("шт. / кг") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            FilledTonalButton(
+                                onClick = { changeQuantity(1f) },
+                                modifier = Modifier.size(50.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) { Text("+", fontSize = 23.sp) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(0.5f, 1f, 2f, 5f).forEach { amount ->
+                                SuggestionChip(
+                                    onClick = {
+                                        quantity = if (amount % 1f == 0f) amount.toInt().toString()
+                                        else amount.toString()
+                                        validationError = null
+                                    },
+                                    label = { Text("+${if (amount % 1f == 0f) amount.toInt() else amount}") }
+                                )
+                            }
+                        }
+                    }
 
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f),
                         shape = RoundedCornerShape(15.dp),
-                        modifier = Modifier.fillMaxWidth()
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .32f), RoundedCornerShape(15.dp))
-                            .clickable { datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate); showDatePicker = true }
-                    ) {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("📅 Срок годности до:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                                Text(dateLabel, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                                Text(if (exact) "Дата указана на упаковке" else "Примерная дата по сроку хранения", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = .32f),
+                                RoundedCornerShape(15.dp)
+                            )
+                            .clickable {
+                                datePickerState.selectedDateMillis = toDatePickerMillis(expiryDate)
+                                showDatePicker = true
                             }
-                            Text("Изменить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    ) {
+                        Row(
+                            Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "📅 Срок годности до:",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    dateLabel,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    if (exact) "Дата указана на упаковке"
+                                    else "Примерная дата по сроку хранения",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
+                            }
+                            Text(
+                                "Изменить",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            )
                         }
                     }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -200,10 +422,7 @@ fun AddProductDialog(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = exact,
-                            onCheckedChange = { exact = it }
-                        )
+                        Checkbox(checked = exact, onCheckedChange = { exact = it })
                         Spacer(Modifier.width(6.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -219,36 +438,47 @@ fun AddProductDialog(
                             )
                         }
                     }
-                    validationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    validationError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    }
                 }
 
                 Row(
-                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(16.dp),
+                    Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("Отмена") }
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(15.dp)
+                    ) { Text("Отмена") }
+
                     Button(
                         onClick = {
                             val name = if (customMode) customName.trim() else selected?.name.orEmpty()
-                            val q = quantity.replace(',', '.').toFloatOrNull()
+                            val amount = quantity.replace(',', '.').toFloatOrNull()
                             when {
                                 name.isBlank() -> validationError = "Выбери продукт или введи его название."
-                                q == null || !q.isFinite() || q <= 0f -> validationError = "Количество должно быть больше нуля."
-                                expiryDate < startOfTodayMillis() -> validationError = "Дата срока годности не может быть в прошлом."
+                                amount == null || !amount.isFinite() || amount <= 0f ->
+                                    validationError = "Количество должно быть больше нуля."
+                                expiryDate < startOfTodayMillis() ->
+                                    validationError = "Дата срока годности не может быть в прошлом."
                                 else -> {
                                     val product = selected
                                     onAdd(
                                         name,
                                         if (customMode) "Другое" else product?.category ?: "Другое",
                                         if (customMode) "📦" else product?.icon ?: "📦",
-                                        q,
+                                        amount,
                                         endOfSelectedDay(expiryDate),
                                         exact
                                     )
                                 }
                             }
                         },
-                        enabled = customMode || selected != null,
+                        enabled = canAdd,
                         modifier = Modifier.weight(1.25f).height(48.dp),
                         shape = RoundedCornerShape(15.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -270,7 +500,8 @@ fun AddProductDialog(
                     showDatePicker = false
                 }) { Text("Выбрать") }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
             }
         ) {
             DatePicker(state = datePickerState, showModeToggle = false)
@@ -279,12 +510,18 @@ fun AddProductDialog(
 }
 
 private fun startOfTodayMillis(): Long = Calendar.getInstance().apply {
-    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
 }.timeInMillis
 
 private fun endOfSelectedDay(value: Long): Long = Calendar.getInstance().apply {
     timeInMillis = value
-    set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+    set(Calendar.HOUR_OF_DAY, 23)
+    set(Calendar.MINUTE, 59)
+    set(Calendar.SECOND, 59)
+    set(Calendar.MILLISECOND, 999)
 }.timeInMillis
 
 private fun toDatePickerMillis(localDateMillis: Long): Long {
