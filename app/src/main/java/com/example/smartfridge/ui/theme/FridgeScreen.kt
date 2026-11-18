@@ -479,7 +479,6 @@ private fun StatPill(icon: String, text: String, background: Color) {
 }
 
 @Composable
-@Composable
 private fun ShoppingListDialog(items: List<String>, onRemove: (String) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
