@@ -33,7 +33,7 @@ private val CardWhite = Color(0xFFFFFFFF)
 private enum class MainTab(val title: String, val icon: String) {
     FRIDGE("Холодильник", "🥬"),
     RECIPES("Рецепты", "🍲"),
-    SHOPPING("Покупки", "🛒"),
+    SETTINGS("Настройки", "⚙"),
     DEBUG("Dev", "⌘")
 }
 
@@ -44,7 +44,13 @@ fun FridgeScreen(
     onCategory: (String?) -> Unit,
     onScan: () -> Unit,
     onAdd: () -> Unit,
-    onDelete: (FridgeProduct) -> Unit = {}
+    onDelete: (FridgeProduct) -> Unit = {},
+    darkTheme: Boolean = false,
+    onThemeChange: (Boolean) -> Unit = {},
+    cameraAddress: String = "",
+    onCameraAddressChange: (String) -> Unit = {},
+    onSaveSettings: () -> Unit = {},
+    onFindCamera: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.FRIDGE) }
     var productToDelete by remember { mutableStateOf<FridgeProduct?>(null) }
@@ -57,7 +63,7 @@ fun FridgeScreen(
     }
 
     Scaffold(
-        containerColor = Canvas,
+        containerColor = if (darkTheme) Color(0xFF101A16) else Canvas,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onScan,
@@ -117,12 +123,14 @@ fun FridgeScreen(
                 description = "Здесь появятся блюда, подобранные по содержимому холодильника. Генератор рецептов пока не подключён — приложение не будет показывать выдуманные рекомендации.",
                 detail = "${state.products.size} продуктов в холодильнике"
             )
-            MainTab.SHOPPING -> FeaturePlaceholder(
+            MainTab.SETTINGS -> SettingsPanel(
                 padding = scaffoldPadding,
-                icon = "🛒",
-                title = "Список покупок",
-                description = "Умный список с отделами магазина и ингредиентами из рецептов подключим следующим этапом. Пока список не хранится в базе данных.",
-                detail = "Скоро здесь появятся покупки и отметки"
+                darkTheme = darkTheme,
+                onThemeChange = onThemeChange,
+                cameraAddress = cameraAddress,
+                onCameraAddressChange = onCameraAddressChange,
+                onSave = onSaveSettings,
+                onFindCamera = onFindCamera
             )
             MainTab.DEBUG -> DebugPanel(
                 padding = scaffoldPadding,
@@ -456,6 +464,45 @@ private fun FeaturePlaceholder(
     }
 }
 
+@Composable
+private fun SettingsPanel(
+    padding: PaddingValues,
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit,
+    cameraAddress: String,
+    onCameraAddressChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onFindCamera: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("ПЕРСОНАЛИЗАЦИЯ", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+        Text("Настройки", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+        Text("Настрой приложение под себя", color = Muted, fontSize = 13.sp)
+        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MintSoft), contentAlignment = Alignment.Center) { Text(if (darkTheme) "🌙" else "☀️", fontSize = 21.sp) }
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) { Text("Тёмная тема", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(if (darkTheme) "Включена" else "Выключена", color = Muted, fontSize = 11.sp) }
+                Switch(checked = darkTheme, onCheckedChange = onThemeChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Mint))
+            }
+        }
+        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MintSoft), contentAlignment = Alignment.Center) { Text("📷", fontSize = 21.sp) }
+                    Spacer(Modifier.width(12.dp))
+                    Column { Text("Камера холодильника", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text("IP-адрес устройства в локальной сети", color = Muted, fontSize = 11.sp) }
+                }
+                OutlinedTextField(value = cameraAddress, onValueChange = onCameraAddressChange, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Адрес камеры") }, placeholder = { Text("Например, 192.168.1.100:8080") }, shape = RoundedCornerShape(15.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Mint, unfocusedBorderColor = Color(0xFFE5EBE6)))
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    OutlinedButton(onClick = onFindCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Text("Найти камеру", fontSize = 11.sp) }
+                    Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint)) { Text("Сохранить") }
+                }
+                Text("Адрес сохраняется на устройстве и используется центральной кнопкой сканирования.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+        }
+    }
+}
 @Composable
 private fun DebugPanel(
     padding: PaddingValues,
