@@ -173,7 +173,11 @@ class YOLODetector(context: Context) {
 
         input.rewind()
 
-        val outputShape = model.getOutputTensor(0).shape()
+        val outputTensor = model.getOutputTensor(0)
+        require(outputTensor.dataType() == DataType.FLOAT32) {
+            "Модель YOLO должна иметь FLOAT32 выход: ${outputTensor.dataType()}"
+        }
+        val outputShape = outputTensor.shape()
 
         require(outputShape.size == 3 && outputShape[0] == 1) {
             "Неподдерживаемый выход YOLO: ${outputShape.contentToString()}"
@@ -186,10 +190,6 @@ class YOLODetector(context: Context) {
         }
 
         model.run(input, output)
-
-        require(model.getOutputTensor(0).dataType() == DataType.FLOAT32) {
-            "Модель YOLO должна иметь FLOAT32 выход: ${model.getOutputTensor(0).dataType()}"
-        }
 
         // Detect the output layout from the known class-channel count, not by
         // assuming that the smaller output dimension is always the channel axis.
