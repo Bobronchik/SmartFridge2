@@ -17,7 +17,12 @@ data class RecognizedProduct(
     val brand: String?,
     val quantity: Float,
     val expiresAt: Long,
-    val isExactDate: Boolean
+    val isExactDate: Boolean,
+    val left: Float = 0f,
+    val top: Float = 0f,
+    val right: Float = 0f,
+    val bottom: Float = 0f,
+    val confidence: Float = 0f
 )
 
 class FridgeVisionPipeline(
@@ -81,7 +86,12 @@ class FridgeVisionPipeline(
                         brand = extractBrand(ocrText),
                         quantity = 1f,
                         expiresAt = finalExpiry,
-                        isExactDate = expiry != null
+                        isExactDate = expiry != null,
+                        left = detection.left,
+                        top = detection.top,
+                        right = detection.right,
+                        bottom = detection.bottom,
+                        confidence = detection.confidence
                     )
                 )
             }
