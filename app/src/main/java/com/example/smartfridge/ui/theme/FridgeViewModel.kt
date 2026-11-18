@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 
 data class FridgeUiState(
     val products: List<FridgeProduct> = emptyList(),
+    val allProducts: List<FridgeProduct> = emptyList(),
     val search: String = "",
     val category: String? = null,
     val cameraConnected: Boolean = false,
@@ -66,7 +67,7 @@ class FridgeViewModel(
             matchesSearch && matchesCategory
         }
 
-        Triple(filtered, query, selectedCategory)
+        Triple(filtered, query, selectedCategory) to products
     }
 
     private val cameraState = combine(
@@ -92,9 +93,10 @@ class FridgeViewModel(
     ) { filters, camera ->
 
         FridgeUiState(
-            products = filters.first,
-            search = filters.second,
-            category = filters.third,
+            products = filters.first.first,
+            allProducts = filters.second,
+            search = filters.first.second,
+            category = filters.first.third,
             cameraConnected = camera.cameraConnected,
             cameraSearching = camera.cameraSearching,
             scanning = camera.scanning,
