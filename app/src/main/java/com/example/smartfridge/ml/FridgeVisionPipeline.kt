@@ -115,7 +115,7 @@ class FridgeVisionPipeline(
             .filter { it.length >= 3 }
 
         return lines.firstOrNull {
-            !it.matches(Regex(""".*\\d{1,2}[./-]\\d{1,2}.*"""))
+            !it.matches(Regex(""".*\d{1,2}[./-]\d{1,2}.*"""))
         }
     }
 
