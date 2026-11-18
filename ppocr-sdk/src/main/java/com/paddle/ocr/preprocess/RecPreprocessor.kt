@@ -27,50 +27,47 @@ data class RecPreprocessResult(
 )
 
 object RecPreprocessor {
-    private const val FIXED_HEIGHT = 32
+    // Must match RecResizeImg.image_shape in models/rec/inference.yml.
+    private const val FIXED_HEIGHT = 48
     private const val MAX_IMG_W = 320
 
     fun preprocessBatch(crops: List<Mat>): RecPreprocessResult {
-        // Convert BGR to RGB and resize to fixed height while preserving aspect ratio
+        // The recognition config specifies BGR input, so keep OpenCV's BGR channel order.
         val resizedMats = mutableListOf<Mat>()
         for (crop in crops) {
-            // Convert BGR to RGB (model expects RGB input)
-            val rgb = Mat()
-            crop.copyTo(rgb)
-            val h = rgb.rows()
-            val w = rgb.cols()
+            require(!crop.empty()) { "Recognition crop is empty" }
+            val bgr = crop.clone()
+            val h = bgr.rows()
+            val w = bgr.cols()
             val aspectRatio = if (h > 0) w.toDouble() / h else 1.0
-            val newW = ceil(FIXED_HEIGHT * aspectRatio).toInt().coerceAtMost(MAX_IMG_W)
+            val newW = ceil(FIXED_HEIGHT * aspectRatio).toInt().coerceIn(1, MAX_IMG_W)
             val dst = Mat()
-            Imgproc.resize(rgb, dst, Size(newW.toDouble(), FIXED_HEIGHT.toDouble()), 0.0, 0.0, Imgproc.INTER_LINEAR)
-            rgb.release()
+            Imgproc.resize(bgr, dst, Size(newW.toDouble(), FIXED_HEIGHT.toDouble()), 0.0, 0.0, Imgproc.INTER_LINEAR)
+            bgr.release()
             resizedMats.add(dst)
         }
 
-        // Convert to float and normalize: (x / 255 - 0.5) / 0.5 = x / 127.5 - 1
+        // Normalize to [-1, 1], matching PaddleOCR's RecResizeImg preprocessing.
         val floatMats = mutableListOf<Mat>()
         for (mat in resizedMats) {
             val floatMat = Mat(mat.rows(), mat.cols(), CvType.CV_32FC3)
             mat.convertTo(floatMat, CvType.CV_32F)
-            // Use Scalar with all 3 channels set — single-value Scalar only sets val[0]!
             Core.divide(floatMat, org.opencv.core.Scalar(127.5, 127.5, 127.5), floatMat)
             Core.subtract(floatMat, org.opencv.core.Scalar(1.0, 1.0, 1.0), floatMat)
 
             floatMats.add(floatMat)
-            mat.release()  // Release resized mat
+            mat.release()
         }
         resizedMats.clear()
 
-        val maxW = MAX_IMG_W
         val n = floatMats.size
-
-        // Pad to max width
         val paddedMats = mutableListOf<Mat>()
         for (mat in floatMats) {
-            if (mat.cols() == maxW) {
+            if (mat.cols() == MAX_IMG_W) {
                 paddedMats.add(mat)
             } else {
-                val padded = Mat(FIXED_HEIGHT, maxW, CvType.CV_32FC3, org.opencv.core.Scalar(0.0))
+                // Zero padding is correct after normalization to [-1, 1].
+                val padded = Mat(FIXED_HEIGHT, MAX_IMG_W, CvType.CV_32FC3, org.opencv.core.Scalar(0.0))
                 val roi = padded.submat(0, FIXED_HEIGHT, 0, mat.cols())
                 mat.copyTo(roi)
                 roi.release()
@@ -80,8 +77,7 @@ object RecPreprocessor {
         }
         floatMats.clear()
 
-        // Build tensor data
-        val channelSize = FIXED_HEIGHT * maxW
+        val channelSize = FIXED_HEIGHT * MAX_IMG_W
         val tensorData = FloatArray(n * 3 * channelSize)
         for (b in 0 until n) {
             val mat = paddedMats[b]
@@ -99,7 +95,7 @@ object RecPreprocessor {
 
         return RecPreprocessResult(
             tensorData = tensorData,
-            shape = longArrayOf(n.toLong(), 3, FIXED_HEIGHT.toLong(), maxW.toLong()),
+            shape = longArrayOf(n.toLong(), 3, FIXED_HEIGHT.toLong(), MAX_IMG_W.toLong()),
         )
     }
 }
