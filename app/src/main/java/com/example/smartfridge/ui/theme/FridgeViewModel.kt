@@ -199,15 +199,15 @@ class FridgeViewModel(
         }
     }
 
-    fun addProduct(name: String, category: String, icon: String, quantity: Float, expiresAt: Long, exact: Boolean) {
-        viewModelScope.launch {
-            try {
-                repository.addProduct(name, category, icon, quantity, expiresAt, exact)
-                message.value = "$name добавлен в холодильник"
-            } catch (e: Exception) {
-                android.util.Log.e("FridgeViewModel", "Adding product failed", e)
-                message.value = e.message ?: "Не удалось добавить продукт"
-            }
+    suspend fun addProduct(name: String, category: String, icon: String, quantity: Float, expiresAt: Long, exact: Boolean): Boolean {
+        return try {
+            repository.addProduct(name, category, icon, quantity, expiresAt, exact)
+            message.value = "$name добавлен в холодильник"
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("FridgeViewModel", "Adding product failed", e)
+            message.value = e.message ?: "Не удалось добавить продукт"
+            false
         }
     }
 
