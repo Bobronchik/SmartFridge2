@@ -740,8 +740,21 @@ private fun ExpiringRecipesPanel(
         }
         if (sortedProducts.isEmpty()) {
             item {
-                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text("Добавь продукты в холодильник — тогда можно будет подобрать рецепты.", modifier = Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 30.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("🍲", fontSize = 42.sp)
+                        Spacer(Modifier.height(10.dp))
+                        Text("Пока нет ингредиентов", color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Добавь продукты в холодильник — и здесь появятся идеи блюд с учётом сроков годности.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
                 }
             }
         } else {
