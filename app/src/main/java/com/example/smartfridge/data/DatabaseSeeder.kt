@@ -41,9 +41,7 @@ object DatabaseSeeder {
         ProductCatalogEntity(name = "Лапша быстрого приготовления", category = "Бакалея", defaultShelfLifeDays = 180, icon = "🍜"),
         ProductCatalogEntity(name = "Жвачка", category = "Сладости", defaultShelfLifeDays = 365, icon = "🍬"),
         ProductCatalogEntity(name = "Десерт", category = "Десерты", defaultShelfLifeDays = 7, icon = "🍰"),
-        ProductCatalogEntity(name = "Сушёные продукты", category = "Бакалея", defaultShelfLifeDays = 180, icon = "🥜"),
         ProductCatalogEntity(name = "Напитки", category = "Напитки", defaultShelfLifeDays = 14, icon = "🧃"),
-        ProductCatalogEntity(name = "Растворимые напитки", category = "Напитки", defaultShelfLifeDays = 180, icon = "☕"),
         ProductCatalogEntity(name = "Консервы", category = "Бакалея", defaultShelfLifeDays = 365, icon = "🥫")
     )
 }
