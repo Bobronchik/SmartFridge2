@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Locale
+import java.util.Calendar
 
 data class RecognizedProduct(
     val name: String,
@@ -146,7 +147,13 @@ class FridgeVisionPipeline(
         )
 
     private fun calculateEstimatedExpiry(days: Int): Long =
-        System.currentTimeMillis() + days * 24L * 60L * 60L * 1000L
+        Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, days.coerceAtLeast(1))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
 
     private fun extractBrand(text: String): String? {
         val clean = text.trim()
