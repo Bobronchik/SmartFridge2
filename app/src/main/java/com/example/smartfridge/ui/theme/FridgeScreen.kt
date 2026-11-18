@@ -349,10 +349,29 @@ private fun SmallMetric(
 @Composable
 private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
     val freshness = getFreshness(product.expiresAt)
-    val (status, color, background, progress) = when (freshness) {
-        Freshness.FRESH -> listOf("Свежий продукт", Mint, MintSoft, .82f)
-        Freshness.EXPIRING_SOON -> listOf("Скоро испортится", Color(0xFFB77A24), Color(0xFFFFF2DB), .35f)
-        Freshness.EXPIRED -> listOf("Срок истёк", Color(0xFFC45E55), Color(0xFFFFE9E7), .08f)
+    val status: String
+    val color: Color
+    val background: Color
+    val progress: Float
+    when (freshness) {
+        Freshness.FRESH -> {
+            status = "Свежий продукт"
+            color = Mint
+            background = MintSoft
+            progress = .82f
+        }
+        Freshness.EXPIRING_SOON -> {
+            status = "Скоро испортится"
+            color = Color(0xFFB77A24)
+            background = Color(0xFFFFF2DB)
+            progress = .35f
+        }
+        Freshness.EXPIRED -> {
+            status = "Срок истёк"
+            color = Color(0xFFC45E55)
+            background = Color(0xFFFFE9E7)
+            progress = .08f
+        }
     }
     val expiry = SimpleDateFormat("dd MMM", Locale("ru")).format(Date(product.expiresAt))
 
