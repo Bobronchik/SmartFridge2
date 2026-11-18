@@ -598,13 +598,13 @@ private fun ExpiringRecipesPanel(
                 Surface(
                     color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(15.dp),
-                    modifier = Modifier.fillMaxWidth().clickable {
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = freshness != Freshness.EXPIRED) {
                         if (selected) selectedIds.remove(product.id) else selectedIds.add(product.id)
                         showResults = false
                     }
                 ) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = selected, onCheckedChange = {
+                        Checkbox(checked = selected, enabled = freshness != Freshness.EXPIRED, onCheckedChange = {
                             if (it) selectedIds.add(product.id) else selectedIds.remove(product.id)
                             showResults = false
                         })
@@ -733,6 +733,7 @@ private fun SettingsPanel(
                 Text("Пауза между повторными снимками при сканировании", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 Slider(value = cameraScanIntervalSeconds.toFloat(), onValueChange = { onCameraScanIntervalChange(it.toInt().coerceIn(1, 10)) }, valueRange = 1f..10f, steps = 8)
                 Text("Каждые $cameraScanIntervalSeconds сек.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Чтобы сохранить интервал, нажми «Сохранить» в блоке камеры выше.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             }
         }
     }
