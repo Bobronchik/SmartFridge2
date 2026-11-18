@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 data class FridgeUiState(
     val products: List<FridgeProduct> = emptyList(),
@@ -50,11 +51,11 @@ class FridgeViewModel(
     }
 
     private val cameraState = combine(
-        cameraConnected, cameraSearching, scanning, lastImage, pendingProducts, message
-    ) { connected, searching, scanningNow, image, pending, msg ->
+        cameraConnected, scanning, lastImage, pendingProducts, message
+    ) { connected, scanningNow, image, pending, msg ->
         FridgeUiState(
             cameraConnected = connected,
-            cameraSearching = searching,
+            cameraSearching = cameraSearching.value,
             scanning = scanningNow,
             lastImage = image,
             pendingProducts = pending,
@@ -88,20 +89,37 @@ class FridgeViewModel(
     fun setCameraSearching(value: Boolean) { cameraSearching.value = value }
     fun setMessage(value: String?) { message.value = value }
 
-    fun scan(address: String) {
+    fun scan(address: String, intervalSeconds: Int = 2) {
         if (scanning.value) return
         viewModelScope.launch {
             scanning.value = true
             pendingProducts.value = emptyList()
-            message.value = "Получаем снимок и распознаём продукты…"
+            val recognizedByName = linkedMapOf<String, RecognizedProduct>()
             try {
-                val bitmap = repository.capture(address)
-                if (bitmap == null) {
-                    message.value = "Не удалось получить снимок. Проверьте адрес и подключение камеры."
-                    return@launch
+                // The current camera firmware exposes /capture (single JPEG), not an
+                // RTSP/WebRTC stream. Poll a small burst of frames using the user interval.
+                repeat(3) { frameIndex ->
+                    message.value = "Кадр ${frameIndex + 1} из 3: распознаём продукты…"
+                    val bitmap = repository.capture(address)
+                    if (bitmap == null) {
+                        if (frameIndex == 0) {
+                            message.value = "Не удалось получить снимок. Проверьте адрес и подключение камеры."
+                            return@launch
+                        }
+                    } else {
+                        lastImage.value = bitmap
+                        val frameProducts = repository.analyze(bitmap)
+                        frameProducts.forEach { item ->
+                            val key = item.name.trim().lowercase()
+                            val previous = recognizedByName[key]
+                            if (previous == null || (!previous.isExactDate && item.isExactDate)) {
+                                recognizedByName[key] = item
+                            }
+                        }
+                    }
+                    if (frameIndex < 2) delay(intervalSeconds.coerceIn(1, 10) * 1_000L)
                 }
-                lastImage.value = bitmap
-                val recognized = repository.analyze(bitmap)
+                val recognized = recognizedByName.values.toList()
                 if (recognized.isEmpty()) {
                     message.value = "Продукты не распознаны. Попробуйте изменить освещение или положение камеры."
                 } else {
