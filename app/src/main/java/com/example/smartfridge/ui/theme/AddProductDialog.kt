@@ -177,7 +177,7 @@ fun AddProductDialog(
                     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().clickable { datePickerState.selectedDateMillis = expiryDate; showDatePicker = true }) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Срок годности", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                Text("📅 Срок годности до:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 Text(dateLabel, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                                 Text(if (exact) "Дата указана на упаковке" else "Примерная дата по сроку хранения", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                             }
