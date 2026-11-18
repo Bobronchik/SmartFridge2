@@ -33,6 +33,26 @@ class ExpiryDateParserTest {
     }
 
     @Test
+    fun parsesIsoExpiryDateAfterManufacturingDate() {
+        val parsed = ExpiryDateParser.findExpiryDate(
+            "Дата изготовления 2026-02-01. Годен до 2026-03-31"
+        )
+        val calendar = Calendar.getInstance().apply { timeInMillis = requireNotNull(parsed) }
+        assertEquals(31, calendar.get(Calendar.DAY_OF_MONTH))
+        assertEquals(Calendar.MARCH, calendar.get(Calendar.MONTH))
+        assertEquals(2026, calendar.get(Calendar.YEAR))
+    }
+
+    @Test
+    fun doesNotFallBackToManufacturingDateWhenExpiryLabelIsUnreadable() {
+        assertNull(
+            ExpiryDateParser.findExpiryDate(
+                "Дата изготовления 01.02.2026. Срок годности неразборчив"
+            )
+        )
+    }
+
+    @Test
     fun doesNotTreatManufacturingDateAsExpiry() {
         assertNull(ExpiryDateParser.findExpiryDate("Дата изготовления 01.02.2026"))
     }
