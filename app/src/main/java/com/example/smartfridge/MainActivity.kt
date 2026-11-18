@@ -269,6 +269,10 @@ private fun SmartFridgeContent(
             cameraScanIntervalMinutes = it.coerceIn(1, 1440)
             preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
         },
+        onSaveCameraInterval = {
+            preferences.edit().putInt("camera_scan_interval_minutes", cameraScanIntervalMinutes).apply()
+            viewModel.setMessage("Интервал между снимками сохранён")
+        },
         shoppingItems = shoppingItems,
         onAddShoppingItem = { name ->
             if (shoppingItems.none { it.equals(name, ignoreCase = true) }) shoppingItems.add(name)
