@@ -41,6 +41,7 @@ class FridgeViewModel(
     private val pendingProducts = MutableStateFlow<List<RecognizedProduct>>(emptyList())
     private val message = MutableStateFlow<String?>(null)
     private val suggestions = MutableStateFlow<List<ProductCatalogEntity>>(emptyList())
+    private var disposed = false
 
     private val productFilters = combine(repository.products, search, category) { products, query, selectedCategory ->
         val filtered = products.filter { product ->
@@ -51,17 +52,18 @@ class FridgeViewModel(
     }
 
     private val cameraState = combine(
-        cameraConnected, scanning, lastImage, pendingProducts, message
-    ) { connected, scanningNow, image, pending, msg ->
-        FridgeUiState(
-            cameraConnected = connected,
-            cameraSearching = cameraSearching.value,
-            scanning = scanningNow,
-            lastImage = image,
-            pendingProducts = pending,
-            message = msg
-        )
-    }
+        combine(cameraConnected, cameraSearching, scanning, lastImage, pendingProducts) {
+                connected, searching, scanningNow, image, pending ->
+            FridgeUiState(
+                cameraConnected = connected,
+                cameraSearching = searching,
+                scanning = scanningNow,
+                lastImage = image,
+                pendingProducts = pending
+            )
+        },
+        message
+    ) { camera, msg -> camera.copy(message = msg) }
 
     val uiState: StateFlow<FridgeUiState> = combine(productFilters, cameraState) { filters, camera ->
         FridgeUiState(
@@ -137,7 +139,7 @@ class FridgeViewModel(
 
     fun updatePendingProduct(index: Int, name: String, expiresAt: Long, isExactDate: Boolean) {
         val current = pendingProducts.value.toMutableList()
-        if (index !in current.indices || name.isBlank()) return
+        if (index !in current.indices) return
         current[index] = current[index].copy(
             name = name.trim(),
             expiresAt = expiresAt,
@@ -158,6 +160,10 @@ class FridgeViewModel(
     fun confirmScanReview() {
         val approved = pendingProducts.value.toList()
         if (approved.isEmpty()) return
+        if (approved.any { it.name.isBlank() }) {
+            message.value = "Укажи название для каждого распознанного продукта."
+            return
+        }
         viewModelScope.launch {
             try {
                 repository.saveRecognizedProducts(approved)
@@ -205,9 +211,16 @@ class FridgeViewModel(
         }
     }
 
-    override fun onCleared() {
+    fun dispose() {
+        if (disposed) return
+        disposed = true
         lastImage.value?.let { if (!it.isRecycled) it.recycle() }
+        lastImage.value = null
         repository.close()
+    }
+
+    override fun onCleared() {
+        dispose()
         super.onCleared()
     }
 }
