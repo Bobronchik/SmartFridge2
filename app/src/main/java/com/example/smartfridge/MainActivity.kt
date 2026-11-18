@@ -1,4 +1,3 @@
-
 package com.example.smartfridge
 
 import android.os.Bundle
@@ -26,12 +25,9 @@ import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         OpenCVLoader.initLocal()
-
         setContent {
             SmartFridgeTheme {
                 SmartFridgeRoot()
@@ -42,50 +38,32 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SmartFridgeRoot() {
-
     val context = LocalContext.current
-
-    var repository by remember {
-        mutableStateOf<SmartFridgeRepository?>(null)
-    }
-
-    var loading by remember {
-        mutableStateOf(true)
-    }
-
-    var error by remember {
-        mutableStateOf(false)
-    }
+    var repository by remember { mutableStateOf<SmartFridgeRepository?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         try {
             val database = AppDatabase.getInstance(context)
-
             withContext(Dispatchers.IO) {
                 DatabaseInitializer(database).initialize()
             }
-
-            val detector = YOLODetector(
-                context.applicationContext
-            )
-
+            val detector = YOLODetector(context.applicationContext)
             val ocr = withContext(Dispatchers.Default) {
                 PaddleOCR.create(context.applicationContext)
             }
-
             val pipeline = FridgeVisionPipeline(
                 yoloDetector = detector,
                 ocr = ocr,
                 productDao = database.productDao()
             )
-
             repository = SmartFridgeRepository(
                 fridgeDao = database.fridgeDao(),
                 productDao = database.productDao(),
                 pipeline = pipeline,
                 cameraRepository = CameraRepository()
             )
-
         } catch (e: Exception) {
             error = true
             e.printStackTrace()
@@ -95,85 +73,49 @@ private fun SmartFridgeRoot() {
     }
 
     if (loading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = androidx.compose.ui.Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
             CircularProgressIndicator()
         }
         return
     }
 
     if (error) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-        ) {
+        Box(Modifier.fillMaxSize().padding(24.dp)) {
             Column {
-                Text(
-                    text = "Не удалось подготовить SmartFridge",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Перезапустите приложение и попробуйте снова."
-                )
+                Text("Не удалось подготовить SmartFridge", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(8.dp))
+                Text("Перезапустите приложение и попробуйте снова.")
             }
         }
         return
     }
 
     val repo = repository ?: return
-
-    val fridgeViewModel = remember(repo) {
-        FridgeViewModel(repo)
-    }
-
+    val fridgeViewModel = remember(repo) { FridgeViewModel(repo) }
     SmartFridgeContent(fridgeViewModel)
 }
 
 @Composable
-private fun SmartFridgeContent(
-    viewModel: FridgeViewModel
-) {
-
+private fun SmartFridgeContent(viewModel: FridgeViewModel) {
     val state by viewModel.uiState.collectAsState()
-
+    val suggestions by viewModel.productSuggestions.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var connected by remember {
-        mutableStateOf(false)
-    }
-
-    var searching by remember {
-        mutableStateOf(false)
-    }
-
-    var cameraAddress by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    var showAddDialog by remember {
-        mutableStateOf(false)
-    }
+    var connected by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
+    var cameraAddress by remember { mutableStateOf<String?>(null) }
+    var showAddDialog by remember { mutableStateOf(false) }
 
     if (!connected) {
-
         CameraSetupScreen(
             connected = false,
             searching = searching,
-
             onSearch = {
                 searching = true
-
                 scope.launch {
                     try {
                         val ip = discoverCamera(context)
-
                         if (ip != null) {
                             cameraAddress = ip
                             connected = true
@@ -184,69 +126,36 @@ private fun SmartFridgeContent(
                     }
                 }
             },
-
-            onDone = {
-                connected = true
-            }
+            onDone = { connected = true }
         )
-
         return
     }
 
     FridgeScreen(
         state = state,
-
-        onSearch = {
-            viewModel.setSearch(it)
-        },
-
-        onCategory = {
-            viewModel.setCategory(it)
-        },
-
+        onSearch = { viewModel.setSearch(it) },
+        onCategory = { viewModel.setCategory(it) },
         onScan = {
-            val address = cameraAddress
-
-            if (address != null) {
-                viewModel.scan(address)
-            }
+            cameraAddress?.let(viewModel::scan)
         },
-
         onAdd = {
+            viewModel.searchCatalog("")
             showAddDialog = true
         }
     )
 
     if (showAddDialog) {
         AddProductDialog(
-            suggestions = emptyList(),
-
-            onSearch = {
-                viewModel.searchCatalog(it)
-            },
-
+            suggestions = suggestions,
+            onSearch = viewModel::searchCatalog,
             onDismiss = {
                 showAddDialog = false
+                viewModel.searchCatalog("")
             },
-
-            onAdd = {
-                    name,
-                    category,
-                    icon,
-                    quantity,
-                    expiresAt,
-                    exact ->
-
-                viewModel.addProduct(
-                    name,
-                    category,
-                    icon,
-                    quantity,
-                    expiresAt,
-                    exact
-                )
-
+            onAdd = { name, category, icon, quantity, expiresAt, exact ->
+                viewModel.addProduct(name, category, icon, quantity, expiresAt, exact)
                 showAddDialog = false
+                viewModel.searchCatalog("")
             }
         )
     }
