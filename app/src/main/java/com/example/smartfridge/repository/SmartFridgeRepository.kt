@@ -92,6 +92,24 @@ class SmartFridgeRepository(
     suspend fun searchProducts(query: String): List<ProductCatalogEntity> =
         productDao.search(query.trim())
 
+    suspend fun updateProduct(product: FridgeProduct) {
+        val entity = fridgeDao.getById(product.id) ?: return
+        require(product.name.isNotBlank()) { "Название продукта не может быть пустым" }
+        require(product.quantity.isFinite() && product.quantity > 0f) { "Количество должно быть больше нуля" }
+        require(product.expiresAt > 0L) { "Укажите корректный срок годности" }
+        fridgeDao.update(
+            entity.copy(
+                name = product.name.trim(),
+                category = product.category.trim().ifBlank { "Другое" },
+                icon = product.icon.ifBlank { "📦" },
+                quantity = product.quantity,
+                expiresAt = product.expiresAt,
+                isExactDate = product.isExactDate,
+                brand = product.brand
+            )
+        )
+    }
+
     suspend fun deleteProduct(product: FridgeProduct) {
         val entity = fridgeDao.getById(product.id) ?: return
         fridgeDao.delete(entity)
