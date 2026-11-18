@@ -19,14 +19,11 @@ import androidx.compose.ui.unit.sp
 import com.example.smartfridge.domain.Freshness
 import com.example.smartfridge.domain.FridgeProduct
 import com.example.smartfridge.domain.getFreshness
+import com.example.smartfridge.domain.buildExpiringRecipes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Mint = Color(0xFF3C9D7A)
-private val MintSoft = Color(0xFFE7F4ED)
-private val Ink = Color(0xFF1F302A)
-private val Muted = Color(0xFF82918A)
 private val Canvas = Color(0xFFF7F8F4)
 private val CardWhite = Color(0xFFFFFFFF)
 
@@ -63,11 +60,11 @@ fun FridgeScreen(
     }
 
     Scaffold(
-        containerColor = if (darkTheme) Color(0xFF101A16) else Canvas,
+        containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onScan,
-                containerColor = Mint,
+                containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 shape = CircleShape,
                 modifier = Modifier.size(62.dp)
@@ -79,7 +76,7 @@ fun FridgeScreen(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = Mint,
+                contentColor = MaterialTheme.colorScheme.primary,
                 tonalElevation = 8.dp
             ) {
                 MainTab.entries.forEach { tab ->
@@ -94,11 +91,11 @@ fun FridgeScreen(
                         },
                         alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Mint,
-                            selectedTextColor = Mint,
-                            indicatorColor = MintSoft,
-                            unselectedIconColor = Muted,
-                            unselectedTextColor = Muted
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                 }
@@ -116,12 +113,9 @@ fun FridgeScreen(
                 onAdd = onAdd,
                 onDelete = { productToDelete = it }
             )
-            MainTab.RECIPES -> FeaturePlaceholder(
+            MainTab.RECIPES -> ExpiringRecipesPanel(
                 padding = scaffoldPadding,
-                icon = "🍲",
-                title = "Рецепты из твоих продуктов",
-                description = "Здесь появятся блюда, подобранные по содержимому холодильника. Генератор рецептов пока не подключён — приложение не будет показывать выдуманные рекомендации.",
-                detail = "${state.products.size} продуктов в холодильнике"
+                products = state.products
             )
             MainTab.SETTINGS -> SettingsPanel(
                 padding = scaffoldPadding,
@@ -184,13 +178,13 @@ private fun FridgeHome(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("SMARTFRIDGE", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("SMARTFRIDGE", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Spacer(Modifier.height(5.dp))
                     Text("Твой холодильник", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                     Text("Всё свежее — под контролем", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 }
                 Box(
-                    modifier = Modifier.size(46.dp).clip(CircleShape).background(MintSoft),
+                    modifier = Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) { Text("🌿", fontSize = 23.sp) }
             }
@@ -244,7 +238,7 @@ private fun FridgeHome(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Продукты", color = MaterialTheme.colorScheme.onSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = onAdd) { Text("+ Добавить", color = Mint, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onAdd) { Text("+ Добавить", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
             }
             Spacer(Modifier.height(4.dp))
             OutlinedTextField(
@@ -258,8 +252,8 @@ private fun FridgeHome(
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedBorderColor = Color(0xFFE8ECE7),
-                    focusedBorderColor = Mint
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
                 )
             )
         }
@@ -274,7 +268,7 @@ private fun FridgeHome(
                         onClick = { onCategory(null) },
                         label = { Text("Все") },
                         shape = RoundedCornerShape(50.dp),
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MintSoft, selectedLabelColor = Mint)
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant, selectedLabelColor = MaterialTheme.colorScheme.primary)
                     )
                 }
                 items(visibleCategories) { category ->
@@ -283,7 +277,7 @@ private fun FridgeHome(
                         onClick = { onCategory(category) },
                         label = { Text(category) },
                         shape = RoundedCornerShape(50.dp),
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MintSoft, selectedLabelColor = Mint)
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant, selectedLabelColor = MaterialTheme.colorScheme.primary)
                     )
                 }
             }
@@ -291,8 +285,8 @@ private fun FridgeHome(
 
         if (state.message != null) {
             item {
-                Surface(color = MintSoft, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text(state.message, color = Mint, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text(state.message, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
                 }
             }
         }
@@ -309,11 +303,11 @@ private fun FridgeHome(
 
         item {
             if (state.scanning) {
-                Surface(color = MintSoft, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Mint)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
-                        Text("Анализируем снимок…", color = Mint, fontSize = 13.sp)
+                        Text("Анализируем снимок…", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                     }
                 }
             }
@@ -364,8 +358,8 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
     when (freshness) {
         Freshness.FRESH -> {
             status = "Свежий продукт"
-            color = Mint
-            background = MintSoft
+            color = MaterialTheme.colorScheme.primary
+            background = MaterialTheme.colorScheme.surfaceVariant
             progress = .82f
         }
         Freshness.EXPIRING_SOON -> {
@@ -386,7 +380,7 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xFFF4F6F1)),
+                modifier = Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) { Text(product.icon, fontSize = 29.sp) }
             Spacer(Modifier.width(13.dp))
@@ -395,7 +389,7 @@ private fun ProductCard(product: FridgeProduct, onDelete: () -> Unit) {
                 Text("${product.quantity} шт. · ${product.category}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 Spacer(Modifier.height(9.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f).height(5.dp).clip(CircleShape).background(Color(0xFFEDF0EB))) {
+                    Box(Modifier.weight(1f).height(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
                         Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape).background(color))
                     }
                     Spacer(Modifier.width(9.dp))
@@ -430,8 +424,201 @@ private fun EmptyFridge(onAdd: () -> Unit) {
             Text("Пока здесь пусто", color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text("Добавь первый продукт вручную или отсканируй холодильник", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             Spacer(Modifier.height(15.dp))
-            Button(onClick = onAdd, colors = ButtonDefaults.buttonColors(containerColor = Mint), shape = RoundedCornerShape(14.dp)) {
+            Button(onClick = onAdd, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(14.dp)) {
                 Text("Добавить продукт")
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ExpiringRecipesPanel(
+    padding: PaddingValues,
+    products: List<FridgeProduct>
+) {
+    val recipes = remember(products) { buildExpiringRecipes(products) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 110.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Text(
+                "РЕЦЕПТЫ ПО СРОКАМ",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.8.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Успеть приготовить",
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 27.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                "Сначала используем продукты, срок которых скоро истекает.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp
+            )
+        }
+
+        if (recipes.isEmpty()) {
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("🥗", fontSize = 38.sp)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Пока всё свежее",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            "Когда у продуктов останется не больше двух дней, здесь появятся подходящие рецепты.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        } else {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "ПРИОРИТЕТНЫЕ БЛЮДА",
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.4.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "${recipes.size} идеи",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+            items(recipes, key = { it.title }) { recipe ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(17.dp),
+                        verticalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    recipe.title,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    recipe.description,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    "${recipe.durationMinutes} мин",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "ИСПОЛЬЗУЕМ СКОРОПОРТЯЩИЕСЯ ПРОДУКТЫ",
+                                color = MaterialTheme.colorScheme.tertiary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            recipe.matchedProducts.forEach { product ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    shape = RoundedCornerShape(11.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(product.icon, fontSize = 17.sp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            product.name,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            if (product.expiresAt - System.currentTimeMillis() < 86_400_000L) "сегодня" else "скоро",
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Text(
+                            "Что понадобится",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            recipe.ingredients.joinToString(" · "),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        recipe.instructions.forEachIndexed { index, instruction ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text(
+                                    "${index + 1}.",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    instruction,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -450,7 +637,7 @@ private fun FeaturePlaceholder(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.size(88.dp).clip(RoundedCornerShape(28.dp)).background(MintSoft), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(88.dp).clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
             Text(icon, fontSize = 38.sp)
         }
         Spacer(Modifier.height(22.dp))
@@ -459,7 +646,7 @@ private fun FeaturePlaceholder(
         Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, lineHeight = 20.sp)
         Spacer(Modifier.height(18.dp))
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(14.dp)) {
-            Text(detail, color = Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp))
+            Text(detail, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp))
         }
     }
 }
@@ -475,28 +662,28 @@ private fun SettingsPanel(
     onFindCamera: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("ПЕРСОНАЛИЗАЦИЯ", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+        Text("ПЕРСОНАЛИЗАЦИЯ", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
         Text("Настройки", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Настрой приложение под себя", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MintSoft), contentAlignment = Alignment.Center) { Text(if (darkTheme) "🌙" else "☀️", fontSize = 21.sp) }
+                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Text(if (darkTheme) "🌙" else "☀️", fontSize = 21.sp) }
                 Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f)) { Text("Тёмная тема", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(if (darkTheme) "Включена" else "Выключена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp) }
-                Switch(checked = darkTheme, onCheckedChange = onThemeChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Mint))
+                Switch(checked = darkTheme, onCheckedChange = onThemeChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MaterialTheme.colorScheme.primary))
             }
         }
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MintSoft), contentAlignment = Alignment.Center) { Text("📷", fontSize = 21.sp) }
+                    Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Text("📷", fontSize = 21.sp) }
                     Spacer(Modifier.width(12.dp))
                     Column { Text("Камера холодильника", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text("IP-адрес устройства в локальной сети", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp) }
                 }
-                OutlinedTextField(value = cameraAddress, onValueChange = onCameraAddressChange, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Адрес камеры") }, placeholder = { Text("Например, 192.168.1.100:8080") }, shape = RoundedCornerShape(15.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Mint, unfocusedBorderColor = Color(0xFFE5EBE6)))
+                OutlinedTextField(value = cameraAddress, onValueChange = onCameraAddressChange, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Адрес камеры") }, placeholder = { Text("Например, 192.168.1.100:8080") }, shape = RoundedCornerShape(15.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     OutlinedButton(onClick = onFindCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Text("Найти камеру", fontSize = 11.sp) }
-                    Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint)) { Text("Сохранить") }
+                    Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("Сохранить") }
                 }
                 Text("Адрес сохраняется на устройстве и используется центральной кнопкой сканирования.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp)
             }
@@ -514,7 +701,7 @@ private fun DebugPanel(
         modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Инструменты", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
+        Text("Инструменты", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
         Text("Диагностика", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Состояние подключённых компонентов", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         DebugRow("База Room", "Подключена", true)
@@ -536,7 +723,7 @@ private fun DebugPanel(
 private fun DebugRow(label: String, value: String, ok: Boolean) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) Mint else Color(0xFFD89B42)))
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) MaterialTheme.colorScheme.primary else Color(0xFFD89B42)))
             Spacer(Modifier.width(10.dp))
             Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
