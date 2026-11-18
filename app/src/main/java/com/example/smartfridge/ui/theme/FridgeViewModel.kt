@@ -196,6 +196,18 @@ class FridgeViewModel(
         }
     }
 
+    fun deleteProduct(product: FridgeProduct) {
+        viewModelScope.launch {
+            try {
+                repository.deleteProduct(product)
+                message.value = "${product.name} удалён"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                message.value = "Не удалось удалить продукт"
+            }
+        }
+    }
+
     fun searchCatalog(query: String) {
         viewModelScope.launch {
             try {
