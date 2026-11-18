@@ -762,6 +762,7 @@ private fun ScanReviewDialog(
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = {
+                                        datePickerState.selectedDateMillis = product.expiresAt
                                         editingDateIndex = index
                                     }) {
                                         Text("📅 " + SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(product.expiresAt)))
@@ -784,7 +785,7 @@ private fun ScanReviewDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, enabled = products.isNotEmpty()) { Text("Добавить в холодильник") }
+            Button(onClick = onConfirm, enabled = products.isNotEmpty() && products.all { it.name.isNotBlank() }) { Text("Добавить в холодильник") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
         containerColor = MaterialTheme.colorScheme.surface
