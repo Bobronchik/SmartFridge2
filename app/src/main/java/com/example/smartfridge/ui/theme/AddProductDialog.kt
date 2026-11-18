@@ -165,12 +165,12 @@ fun AddProductDialog(
 
                     OutlinedTextField(
                         value = quantity,
-                        onValueChange = { value -> quantity = value.filter { it.isDigit() || it == '.' || it == ',' }.take(8) },
+                        onValueChange = { value -> quantity = value.filter { it.isDigit() }.take(5) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(min = 0.dp),
                         singleLine = true,
-                        label = { Text("Количество (шт. или кг)") },
+                        label = { Text("Количество, шт.") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(14.dp)
                     )
@@ -230,10 +230,10 @@ fun AddProductDialog(
                     Button(
                         onClick = {
                             val name = if (customMode) customName.trim() else selected?.name.orEmpty()
-                            val q = quantity.replace(',', '.').toFloatOrNull()
+                            val q = quantity.toIntOrNull()?.toFloat()
                             when {
                                 name.isBlank() -> validationError = "Выбери продукт или введи его название."
-                                q == null || !q.isFinite() || q <= 0f -> validationError = "Количество должно быть больше нуля."
+                                q == null || q <= 0f -> validationError = "Количество должно быть больше нуля."
                                 expiryDate < startOfTodayMillis() -> validationError = "Дата срока годности не может быть в прошлом."
                                 else -> {
                                     val product = selected
