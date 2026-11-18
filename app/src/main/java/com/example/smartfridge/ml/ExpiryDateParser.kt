@@ -84,7 +84,9 @@ object ExpiryDateParser {
         return try {
 
             val calendar =
-                Calendar.getInstance()
+                Calendar.getInstance().apply {
+                    isLenient = false
+                }
 
             calendar.clear()
 
