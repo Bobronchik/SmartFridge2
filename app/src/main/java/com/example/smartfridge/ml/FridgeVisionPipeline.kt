@@ -7,6 +7,8 @@ import com.example.smartfridge.data.ProductDao
 import com.paddle.ocr.PaddleOCR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
+import java.util.Locale
 
 data class RecognizedProduct(
     val name: String,
@@ -63,7 +65,7 @@ class FridgeVisionPipeline(
                 }
 
                 val expiry = ExpiryDateParser.findExpiryDate(ocrText)
-                val product = findCatalogProduct(detection.label)
+                val product = findCatalogProduct(detection.label, ocrText)
                     ?: createFallbackProduct(detection.label)
                 val finalExpiry = expiry
                     ?: calculateEstimatedExpiry(product.defaultShelfLifeDays)
@@ -84,13 +86,35 @@ class FridgeVisionPipeline(
         }
 
     private suspend fun findCatalogProduct(
-        yoloLabel: String
+        yoloLabel: String,
+        ocrText: String
     ): ProductCatalogEntity? {
-        // A detector class such as "Молоко" is a category. A LIKE search here used
-        // to select the first alphabetic catalog item in that category as if it
-        // were the exact product, which produced misleading product names.
+        val normalizedText = normalize(ocrText)
+        if (normalizedText.length >= 4) {
+            val normalizedLabel = normalize(yoloLabel)
+            val candidates = productDao.observeAll().first()
+                .filter { product ->
+                    val normalizedName = normalize(product.name)
+                    normalizedName.length >= 4 && normalizedText.contains(normalizedName)
+                }
+
+            // Prefer the longest OCR name match; use the YOLO class only as a tie-breaker.
+            val ocrMatch = candidates.maxWithOrNull(
+                compareBy<ProductCatalogEntity>(
+                    { if (normalize(it.category) == normalizedLabel) 1 else 0 },
+                    { normalize(it.name).length }
+                )
+            )
+            if (ocrMatch != null) return ocrMatch
+        }
+
+        // A detector class is a broad category, not a product name. Never use LIKE
+        // here: it used to return an arbitrary alphabetically-first catalog product.
         return productDao.findByName(yoloLabel)
     }
+
+    private fun normalize(value: String): String =
+        value.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
 
     private fun createFallbackProduct(label: String): ProductCatalogEntity =
         ProductCatalogEntity(
