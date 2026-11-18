@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlin.math.roundToInt
 
 data class FridgeUiState(
     val products: List<FridgeProduct> = emptyList(),
@@ -111,6 +112,7 @@ class FridgeViewModel(
                     val bitmap = repository.capture(address)
                     if (bitmap == null) {
                         if (frameIndex == 0) {
+                            cameraConnected.value = false
                             message.value = "Не удалось получить снимок. Проверьте адрес и подключение камеры."
                             return@launch
                         }
@@ -120,7 +122,11 @@ class FridgeViewModel(
                         val frameProducts = repository.analyze(bitmap)
                         previewDetections.value = frameProducts
                         frameProducts.forEach { item ->
-                            val key = item.name.trim().lowercase()
+                            // Keep two identical products at different shelf positions separate,
+                            // while collapsing the same object seen in consecutive frames.
+                            val centerX = (item.left + item.right) / 2f
+                            val centerY = (item.top + item.bottom) / 2f
+                            val key = "${item.name.trim().lowercase()}:${(centerX / 100f).roundToInt()}:${(centerY / 100f).roundToInt()}"
                             val previous = recognizedByName[key]
                             if (previous == null || (!previous.isExactDate && item.isExactDate)) {
                                 recognizedByName[key] = item
