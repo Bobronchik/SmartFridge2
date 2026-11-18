@@ -146,6 +146,7 @@ fun FridgeScreen(
                 onCameraAddressChange = onCameraAddressChange,
                 onSave = onSaveSettings,
                 onFindCamera = onFindCamera,
+                cameraSearching = state.cameraSearching,
                 cameraScanIntervalSeconds = cameraScanIntervalSeconds,
                 onCameraScanIntervalChange = onCameraScanIntervalChange
             )
@@ -697,6 +698,7 @@ private fun SettingsPanel(
     onCameraAddressChange: (String) -> Unit,
     onSave: () -> Unit,
     onFindCamera: () -> Unit,
+    cameraSearching: Boolean,
     cameraScanIntervalSeconds: Int,
     onCameraScanIntervalChange: (Int) -> Unit
 ) {
@@ -721,7 +723,20 @@ private fun SettingsPanel(
                 }
                 OutlinedTextField(value = cameraAddress, onValueChange = onCameraAddressChange, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Адрес камеры") }, placeholder = { Text("Например, 192.168.1.100:8080") }, shape = RoundedCornerShape(15.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    OutlinedButton(onClick = onFindCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Text("Найти камеру", fontSize = 11.sp) }
+                    OutlinedButton(
+                        onClick = onFindCamera,
+                        enabled = !cameraSearching,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(13.dp)
+                    ) {
+                        if (cameraSearching) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(7.dp))
+                            Text("Поиск…", fontSize = 11.sp)
+                        } else {
+                            Text("Найти камеру", fontSize = 11.sp)
+                        }
+                    }
                     Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("Сохранить") }
                 }
                 Text("Адрес сохраняется на устройстве и используется центральной кнопкой сканирования.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp)
