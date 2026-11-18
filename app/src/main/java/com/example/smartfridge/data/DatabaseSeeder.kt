@@ -1,8 +1,8 @@
 package com.example.smartfridge.data
 
 object DatabaseSeeder {
-    // Practical starter catalog. Shelf life is an estimate for typical refrigerated
-    // storage; the user-entered or package date always takes precedence.
+    // Practical starter catalog aligned with the detector's food classes.
+    // Shelf-life values are estimates; package dates and user edits always take precedence.
     fun products(): List<ProductCatalogEntity> = listOf(
         ProductCatalogEntity(name = "Молоко", category = "Молочные продукты", defaultShelfLifeDays = 7, icon = "🥛"),
         ProductCatalogEntity(name = "Кефир", category = "Молочные продукты", defaultShelfLifeDays = 7, icon = "🥛"),
