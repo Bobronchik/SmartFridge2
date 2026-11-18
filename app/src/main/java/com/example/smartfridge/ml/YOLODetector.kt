@@ -187,24 +187,22 @@ class YOLODetector(context: Context) {
 
         model.run(input, output)
 
-        val channelFirst = outputShape[1] < outputShape[2]
-
-        val channels = if (channelFirst) {
-            outputShape[1]
-        } else {
-            outputShape[2]
+        require(model.getOutputTensor(0).dataType() == DataType.FLOAT32) {
+            "Модель YOLO должна иметь FLOAT32 выход: ${model.getOutputTensor(0).dataType()}"
         }
 
-        val predictions = if (channelFirst) {
-            outputShape[2]
-        } else {
-            outputShape[1]
+        // Detect the output layout from the known class-channel count, not by
+        // assuming that the smaller output dimension is always the channel axis.
+        val expectedChannels = labels.size + 4
+        val channelFirst = outputShape[1] == expectedChannels
+        val channelLast = outputShape[2] == expectedChannels
+        require(channelFirst.xor(channelLast)) {
+            "Не удалось определить формат выхода YOLO. Ожидалось $expectedChannels " +
+                    "каналов, форма: ${outputShape.contentToString()}"
         }
 
-        require(channels == labels.size + 4) {
-            "Ожидалось ${labels.size + 4} каналов, получено $channels. " +
-                    "Форма: ${outputShape.contentToString()}"
-        }
+        val channels = expectedChannels
+        val predictions = if (channelFirst) outputShape[2] else outputShape[1]
 
         fun value(channel: Int, index: Int): Float {
             return if (channelFirst) {
