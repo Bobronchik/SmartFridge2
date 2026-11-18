@@ -1,0 +1,18 @@
+﻿class_id,label_en,label_ru,type
+39,bottle,бутылка,drink_container
+40,wine glass,бокал,tableware
+41,cup,чашка,tableware
+42,fork,вилка,tableware
+43,knife,нож,tableware
+44,spoon,ложка,tableware
+45,bowl,миска,tableware
+46,banana,банан,food
+47,apple,яблоко,food
+48,sandwich,сэндвич,food
+49,orange,апельсин,food
+50,broccoli,брокколи,food
+51,carrot,морковь,food
+52,hot dog,хот-дог,food
+53,pizza,пицца,food
+54,donut,пончик,food
+55,cake,торт,food
