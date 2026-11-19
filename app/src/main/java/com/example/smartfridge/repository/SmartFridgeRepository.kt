@@ -34,7 +34,14 @@ class SmartFridgeRepository(
     suspend fun saveRecognizedProducts(products: List<RecognizedProduct>) {
         if (products.isEmpty()) return
         val now = System.currentTimeMillis()
-        val entities = products.map { product ->
+        // Repeated camera scans should not add the same catalog item again immediately.
+        // Different physical packages detected in one review are still all preserved.
+        val recentWindowStart = now - 2 * 60 * 1000L
+        val productsToSave = products.filter { product ->
+            fridgeDao.findRecentlyAddedByName(product.name.trim(), recentWindowStart) == null
+        }
+        if (productsToSave.isEmpty()) return
+        val entities = productsToSave.map { product ->
             val catalogItem = productDao.findByName(product.name)
             FridgeItemEntity(
                 productId = catalogItem?.id,
