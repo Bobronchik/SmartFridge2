@@ -46,9 +46,14 @@ class GeminiProductVerifier(
         )
     }
 
+    @Volatile
+    private var apiUnavailableForSession: Boolean = false
+
     suspend fun verify(crop: Bitmap, yoloLabel: String, ocrText: String): String? =
         withContext(Dispatchers.IO) {
-            if (apiKey.isBlank()) return@withContext null
+            // A regional/API access rejection will not be retried for every
+            // detected object. YOLO remains authoritative for this app session.
+            if (apiKey.isBlank() || apiUnavailableForSession) return@withContext null
 
             var connection: HttpURLConnection? = null
             try {
@@ -111,6 +116,9 @@ class GeminiProductVerifier(
 
                 if (status !in 200..299) {
                     Log.w(TAG, "Gemini HTTP $status: ${responseText.take(500)}")
+                    if (status == 400 || status == 403 || status == 404 || status == 451) {
+                        apiUnavailableForSession = true
+                    }
                     return@withContext null
                 }
 
