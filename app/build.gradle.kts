@@ -6,6 +6,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val localProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }
+}
+val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "com.example.smartfridge"
