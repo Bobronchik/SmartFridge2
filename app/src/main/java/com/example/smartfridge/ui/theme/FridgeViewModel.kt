@@ -67,14 +67,19 @@ class FridgeViewModel(
         combine(cameraConnected, cameraSearching) { connected, searching ->
             connected to searching
         },
-        combine(scanning, lastImage, pendingProducts, previewDetections) {
-                scanningNow, image, pending, detections ->
-            FridgeUiState(
-                scanning = scanningNow,
-                lastImage = image,
-                pendingProducts = pending,
-                previewDetections = detections
-            )
+        combine(
+            combine(scanning, lastImage, pendingProducts, previewDetections) {
+                    scanningNow, image, pending, detections ->
+                FridgeUiState(
+                    scanning = scanningNow,
+                    lastImage = image,
+                    pendingProducts = pending,
+                    previewDetections = detections
+                )
+            },
+            combine(photoBusy, geminiPhotoResult) { busy, result -> busy to result }
+        ) { scanState, photoState ->
+            scanState.copy(photoBusy = photoState.first, geminiPhotoResult = photoState.second)
         }
     ) { connection, scan ->
         scan.copy(
@@ -95,6 +100,8 @@ class FridgeViewModel(
             cameraSearching = camera.cameraSearching,
             scanning = camera.scanning,
             lastImage = camera.lastImage,
+            photoBusy = camera.photoBusy,
+            geminiPhotoResult = camera.geminiPhotoResult,
             pendingProducts = camera.pendingProducts,
             previewDetections = camera.previewDetections,
             message = camera.message
