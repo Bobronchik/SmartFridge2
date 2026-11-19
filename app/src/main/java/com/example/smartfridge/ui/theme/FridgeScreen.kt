@@ -175,7 +175,8 @@ fun FridgeScreen(
                 padding = scaffoldPadding,
                 state = state,
                 expiringCount = expiringCount,
-                expiredCount = expiredCount
+                expiredCount = expiredCount,
+                onTakePhoto = onTakePhoto
             )
         }
     }
@@ -983,10 +984,11 @@ private fun DebugPanel(
     padding: PaddingValues,
     state: FridgeUiState,
     expiringCount: Int,
-    expiredCount: Int
+    expiredCount: Int,
+    onTakePhoto: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
+        modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Инструменты", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
