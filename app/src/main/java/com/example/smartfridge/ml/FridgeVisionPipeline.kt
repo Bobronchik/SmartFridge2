@@ -47,7 +47,7 @@ class FridgeVisionPipeline(
 
     private val engineMutex = Mutex()
 
-    suspend fun analyze(bitmap: Bitmap): List<RecognizedProduct> =
+    suspend fun analyze(bitmap: Bitmap, allowGeminiVerification: Boolean = true): List<RecognizedProduct> =
         withContext(Dispatchers.Default) {
             engineMutex.withLock {
             val detections = yoloDetector.detect(bitmap)
@@ -93,7 +93,9 @@ class FridgeVisionPipeline(
 
                     // Ask Gemini only for uncertain YOLO results or when package OCR is empty.
                     // If Gemini is unavailable or uncertain, the original YOLO result is retained.
-                    if (detection.confidence < GEMINI_VERIFY_CONFIDENCE || ocrText.isBlank()) {
+                    if (allowGeminiVerification &&
+                        (detection.confidence < GEMINI_VERIFY_CONFIDENCE || ocrText.isBlank())
+                    ) {
                         verifiedLabel = geminiVerifier?.verify(crop, detection.label, ocrText)
                     }
                 } finally {
