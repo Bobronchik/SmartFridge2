@@ -24,6 +24,14 @@ interface FridgeDao {
     @Query("SELECT * FROM fridge_items WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): FridgeItemEntity?
 
+    @Query("""
+        SELECT * FROM fridge_items
+        WHERE LOWER(name) = LOWER(:name) AND addedAt >= :since
+        ORDER BY addedAt DESC
+        LIMIT 1
+    """)
+    suspend fun findRecentlyAddedByName(name: String, since: Long): FridgeItemEntity?
+
     @Insert
     suspend fun insert(
         item: FridgeItemEntity
