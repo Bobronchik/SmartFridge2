@@ -31,8 +31,8 @@ class SmartFridgeRepository(
     // the result and call saveRecognizedProducts only after explicit confirmation.
     suspend fun analyze(bitmap: Bitmap): List<RecognizedProduct> = pipeline.analyze(bitmap)
 
-    suspend fun saveRecognizedProducts(products: List<RecognizedProduct>) {
-        if (products.isEmpty()) return
+    suspend fun saveRecognizedProducts(products: List<RecognizedProduct>): Int {
+        if (products.isEmpty()) return 0
         val now = System.currentTimeMillis()
         // Repeated camera scans should not add the same catalog item again immediately.
         // Different physical packages detected in one review are still all preserved.
@@ -40,7 +40,7 @@ class SmartFridgeRepository(
         val productsToSave = products.filter { product ->
             fridgeDao.findRecentlyAddedByName(product.name.trim(), recentWindowStart) == null
         }
-        if (productsToSave.isEmpty()) return
+        if (productsToSave.isEmpty()) return 0
         val entities = productsToSave.map { product ->
             val catalogItem = productDao.findByName(product.name)
             FridgeItemEntity(
@@ -56,6 +56,7 @@ class SmartFridgeRepository(
             )
         }
         fridgeDao.insertAll(entities)
+        return entities.size
     }
 
     suspend fun addProduct(
