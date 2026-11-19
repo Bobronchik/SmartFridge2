@@ -226,9 +226,13 @@ class FridgeViewModel(
         savingScanReview = true
         viewModelScope.launch {
             try {
-                repository.saveRecognizedProducts(approved)
+                val savedCount = repository.saveRecognizedProducts(approved)
                 pendingProducts.value = emptyList()
-                message.value = "Добавлено продуктов: ${approved.size}"
+                message.value = if (savedCount == 0) {
+                    "Эти продукты уже были добавлены недавно."
+                } else {
+                    "Добавлено продуктов: $savedCount"
+                }
             } catch (e: Exception) {
                 android.util.Log.e("FridgeViewModel", "Saving scan review failed", e)
                 message.value = "Не удалось сохранить распознанные продукты."
