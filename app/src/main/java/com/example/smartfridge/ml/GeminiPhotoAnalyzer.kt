@@ -65,8 +65,8 @@ class GeminiPhotoAnalyzer(private val apiKey: String) {
         try {
             connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
-                connectTimeout = 15_000
-                readTimeout = 30_000
+                connectTimeout = 6_000
+                readTimeout = 12_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("x-goog-api-key", apiKey)
