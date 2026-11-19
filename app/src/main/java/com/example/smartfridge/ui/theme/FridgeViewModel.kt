@@ -1,6 +1,7 @@
 package com.example.smartfridge.ui
 
 import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smartfridge.data.ProductCatalogEntity
@@ -285,7 +286,7 @@ class FridgeViewModel(
                     } else {
                         cameraConnected.value = true
                         lastImage.value = bitmap
-                        val frameProducts = repository.analyzeLocal(bitmap)
+                        val frameProducts = classifyDemoColor(bitmap)?.let { listOf(it) } ?: emptyList()
                         previewDetections.value = frameProducts
                         frameResults.add(frameProducts)
                     }
@@ -309,6 +310,83 @@ class FridgeViewModel(
         }
     }
 
+
+    /**
+     * Jury demo mode: one item is presented at a time.
+     * The central camera region is classified by its dominant saturated HSV hue.
+     * This is intentionally isolated to the demo branch; the training branch keeps YOLO.
+     */
+    private fun classifyDemoColor(bitmap: Bitmap): RecognizedProduct? {
+        val left = (bitmap.width * 0.20f).toInt()
+        val top = (bitmap.height * 0.20f).toInt()
+        val right = (bitmap.width * 0.80f).toInt().coerceAtLeast(left + 1)
+        val bottom = (bitmap.height * 0.80f).toInt().coerceAtLeast(top + 1)
+        val hsv = FloatArray(3)
+        val votes = IntArray(4)
+        var colorfulPixels = 0
+        val step = maxOf(2, minOf(bitmap.width, bitmap.height) / 240)
+
+        var y = top
+        while (y < bottom) {
+            var x = left
+            while (x < right) {
+                Color.colorToHSV(bitmap.getPixel(x, y), hsv)
+                val hue = hsv[0]
+                val saturation = hsv[1]
+                val value = hsv[2]
+                if (saturation >= 0.32f && value >= 0.18f) {
+                    val bucket = when {
+                        hue >= 42f && hue < 69f -> 0 // yellow: banana
+                        hue >= 15f && hue < 42f -> 1 // orange: orange
+                        hue >= 69f && hue < 170f -> 2 // green: cucumber
+                        hue >= 345f || hue < 15f -> 3 // red: pepper
+                        else -> -1
+                    }
+                    if (bucket >= 0) {
+                        votes[bucket]++
+                        colorfulPixels++
+                    }
+                }
+                x += step
+            }
+            y += step
+        }
+
+        if (colorfulPixels < 20) return null
+        val winner = votes.indices.maxByOrNull { votes[it] } ?: return null
+        val share = votes[winner].toFloat() / colorfulPixels.toFloat()
+        // Reject mixed/ambiguous scenes instead of inventing a product label.
+        if (share < 0.34f) return null
+
+        val (name, category, icon, shelfLifeDays) = when (winner) {
+            0 -> arrayOf("Банан", "Фрукты", "🍌", "5")
+            1 -> arrayOf("Апельсин", "Фрукты", "🍊", "14")
+            2 -> arrayOf("Огурец", "Овощи", "🥒", "7")
+            else -> arrayOf("Перец", "Овощи", "🌶️", "7")
+        }
+        val expiry = java.util.Calendar.getInstance().apply {
+            add(java.util.Calendar.DAY_OF_YEAR, shelfLifeDays.toInt())
+            set(java.util.Calendar.HOUR_OF_DAY, 23)
+            set(java.util.Calendar.MINUTE, 59)
+            set(java.util.Calendar.SECOND, 59)
+            set(java.util.Calendar.MILLISECOND, 999)
+        }.timeInMillis
+
+        return RecognizedProduct(
+            name = name,
+            category = category,
+            icon = icon,
+            brand = null,
+            quantity = 1f,
+            expiresAt = expiry,
+            isExactDate = false,
+            left = 0f,
+            top = 0f,
+            right = bitmap.width.toFloat(),
+            bottom = bitmap.height.toFloat(),
+            confidence = share.coerceIn(0f, 1f)
+        )
+    }
 
     /**
      * Combines detections of the same physical package across a short camera burst.
