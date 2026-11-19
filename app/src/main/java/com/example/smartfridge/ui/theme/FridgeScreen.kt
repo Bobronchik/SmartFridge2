@@ -996,12 +996,12 @@ private fun DebugPanel(
         Text("Диагностика", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Состояние подключённых компонентов", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         DebugRow("База Room", "Подключена", true)
-        DebugRow("YOLO / PaddleOCR", "Не используются в DEV-фото", true)
+        DebugRow("YOLO / PaddleOCR", "Локальное распознавание", true)
         DebugRow("Gemini", if (state.geminiPhotoResult != null) "Ответ получен / ошибка показана ниже" else "Ожидание фото", true)
         DebugRow("Камера", if (state.cameraConnected) "Подключена" else "Не подключена", state.cameraConnected)
         HorizontalDivider(color = Color(0xFFE8ECE7))
-        Text("Проверка камеры и Gemini", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Text("Получаем один JPEG с /capture. Оригинальное фото отправляется напрямую в Gemini — без YOLO, OCR и обрезки.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("Проверка камеры, YOLO и Gemini", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text("Получаем один JPEG с /capture. Сначала фото анализируют локальные YOLO и OCR, затем Gemini пробует дать дополнительный ответ. Если Gemini недоступен, остаётся результат YOLO.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
         Button(
             onClick = onTakePhoto,
             enabled = !state.photoBusy,
@@ -1013,7 +1013,7 @@ private fun DebugPanel(
                 Spacer(Modifier.width(9.dp))
                 Text("Получаю фото / анализирую…")
             } else {
-                Text("📷  Сделать фото и отправить в Gemini")
+                Text("📷  Сделать фото и распознать продукты")
             }
         }
         state.lastImage?.let { bitmap ->
