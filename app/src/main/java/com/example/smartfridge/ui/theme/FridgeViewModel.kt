@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smartfridge.data.ProductCatalogEntity
 import com.example.smartfridge.domain.FridgeProduct
 import com.example.smartfridge.ml.RecognizedProduct
+import com.example.smartfridge.ml.GeminiPhotoAnalyzer
 import com.example.smartfridge.repository.SmartFridgeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,8 @@ data class FridgeUiState(
     val cameraSearching: Boolean = false,
     val scanning: Boolean = false,
     val lastImage: Bitmap? = null,
+    val photoBusy: Boolean = false,
+    val geminiPhotoResult: String? = null,
     val pendingProducts: List<RecognizedProduct> = emptyList(),
     val previewDetections: List<RecognizedProduct> = emptyList(),
     val message: String? = null
@@ -43,6 +46,8 @@ class FridgeViewModel(
     private val cameraSearching = MutableStateFlow(false)
     private val scanning = MutableStateFlow(false)
     private val lastImage = MutableStateFlow<Bitmap?>(null)
+    private val photoBusy = MutableStateFlow(false)
+    private val geminiPhotoResult = MutableStateFlow<String?>(null)
     private val pendingProducts = MutableStateFlow<List<RecognizedProduct>>(emptyList())
     private val previewDetections = MutableStateFlow<List<RecognizedProduct>>(emptyList())
     private val message = MutableStateFlow<String?>(null)
@@ -106,6 +111,32 @@ class FridgeViewModel(
     fun setCameraConnected(value: Boolean) { cameraConnected.value = value }
     fun setCameraSearching(value: Boolean) { cameraSearching.value = value }
     fun setMessage(value: String?) { message.value = value }
+
+    /**
+     * DEV: fetch one untouched JPEG frame and send that same frame to Gemini.
+     * Does not call FridgeVisionPipeline, YOLO or PaddleOCR.
+     */
+    fun capturePhotoForGemini(address: String, apiKey: String) {
+        if (photoBusy.value) return
+        viewModelScope.launch {
+            photoBusy.value = true
+            geminiPhotoResult.value = null
+            try {
+                val bitmap = repository.capture(address.trim())
+                    ?: throw IllegalStateException("Камера не вернула изображение. Проверь адрес /capture.")
+                lastImage.value = bitmap
+                cameraConnected.value = true
+                geminiPhotoResult.value = "Фото получено. Отправляю оригинал в Gemini…"
+                val result = GeminiPhotoAnalyzer(apiKey).analyze(bitmap)
+                geminiPhotoResult.value = result
+            } catch (e: Exception) {
+                android.util.Log.e("FridgeViewModel", "DEV photo/Gemini failed", e)
+                geminiPhotoResult.value = "Ошибка: ${e.message ?: "не удалось получить ответ Gemini"}"
+            } finally {
+                photoBusy.value = false
+            }
+        }
+    }
 
     fun scan(address: String, intervalMinutes: Int = 1) {
         if (scanning.value) return
