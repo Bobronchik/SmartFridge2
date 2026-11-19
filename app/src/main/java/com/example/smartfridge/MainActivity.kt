@@ -229,6 +229,14 @@ private fun SmartFridgeContent(
                 viewModel.setMessage("Укажи адрес камеры в настройках.")
             }
         },
+        onTakePhoto = {
+            val address = cameraAddress.trim()
+            if (address.isNotBlank()) {
+                viewModel.capturePhotoForGemini(address, BuildConfig.GEMINI_API_KEY)
+            } else {
+                viewModel.setMessage("Сначала укажи адрес камеры в Настройки.")
+            }
+        },
 
         onAdd = {
             showAddDialog = true
