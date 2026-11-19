@@ -348,11 +348,12 @@ class FridgeViewModel(
      * Each sufficiently large region becomes one detected product.
      */
     private fun classifyDemoColors(bitmap: Bitmap): List<RecognizedProduct> {
-        val left = (bitmap.width * 0.20f).toInt()
-        val top = (bitmap.height * 0.20f).toInt()
-        val right = (bitmap.width * 0.80f).toInt().coerceAtLeast(left + 1)
-        val bottom = (bitmap.height * 0.80f).toInt().coerceAtLeast(top + 1)
-        val step = maxOf(2, minOf(bitmap.width, bitmap.height) / 240)
+        // Analyse the central scene, leaving margins to avoid background noise.
+        val left = (bitmap.width * 0.12f).toInt()
+        val top = (bitmap.height * 0.12f).toInt()
+        val right = (bitmap.width * 0.88f).toInt().coerceAtLeast(left + 1)
+        val bottom = (bitmap.height * 0.88f).toInt().coerceAtLeast(top + 1)
+        val step = maxOf(2, minOf(bitmap.width, bitmap.height) / 300)
         val gridWidth = ((right - left + step - 1) / step).coerceAtLeast(1)
         val gridHeight = ((bottom - top + step - 1) / step).coerceAtLeast(1)
         val total = gridWidth * gridHeight
@@ -365,26 +366,35 @@ class FridgeViewModel(
                 val y = (top + gy * step).coerceAtMost(bitmap.height - 1)
                 Color.colorToHSV(bitmap.getPixel(x, y), hsv)
                 if (hsv[1] >= 0.32f && hsv[2] >= 0.18f) {
+                    // Keep yellow and orange apart: bananas should not fall into orange.
                     buckets[gy * gridWidth + gx] = when {
-                        hsv[0] >= 42f && hsv[0] < 69f -> 0 // yellow: banana
-                        hsv[0] >= 15f && hsv[0] < 42f -> 1 // orange: orange
-                        hsv[0] >= 69f && hsv[0] < 170f -> 2 // green: cucumber
-                        hsv[0] >= 345f || hsv[0] < 15f -> 3 // red: pepper
+                        hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
+                        hsv[0] >= 18f && hsv[0] < 40f -> 1 // orange: orange
+                        hsv[0] >= 70f && hsv[0] < 170f -> 2 // green: cucumber
+                        hsv[0] >= 345f || hsv[0] < 18f -> 3 // red: pepper
                         else -> -1
                     }
                 }
             }
         }
 
+        data class Region(
+            val bucket: Int,
+            var minX: Int,
+            var minY: Int,
+            var maxX: Int,
+            var maxY: Int,
+            var pixels: Int
+        )
+
         val visited = BooleanArray(total)
         val queue = IntArray(total)
-        val detections = mutableListOf<RecognizedProduct>()
-        val minComponentPixels = 20
+        val regions = mutableListOf<Region>()
+        val minComponentPixels = 55
 
         for (seed in 0 until total) {
             val bucket = buckets[seed]
             if (bucket < 0 || visited[seed]) continue
-
             var head = 0
             var tail = 0
             queue[tail++] = seed
@@ -393,57 +403,81 @@ class FridgeViewModel(
             var maxX = minX
             var minY = seed / gridWidth
             var maxY = minY
-            var componentSize = 0
+            var count = 0
 
             while (head < tail) {
                 val current = queue[head++]
                 val x = current % gridWidth
                 val y = current / gridWidth
-                componentSize++
+                count++
                 minX = minOf(minX, x)
                 maxX = maxOf(maxX, x)
                 minY = minOf(minY, y)
                 maxY = maxOf(maxY, y)
-
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        if (dx == 0 && dy == 0) continue
-                        val nx = x + dx
-                        val ny = y + dy
-                        if (nx !in 0 until gridWidth || ny !in 0 until gridHeight) continue
-                        val neighbor = ny * gridWidth + nx
-                        if (!visited[neighbor] && buckets[neighbor] == bucket) {
-                            visited[neighbor] = true
-                            queue[tail++] = neighbor
-                        }
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx
+                    val ny = y + dy
+                    if (nx !in 0 until gridWidth || ny !in 0 until gridHeight) continue
+                    val neighbor = ny * gridWidth + nx
+                    if (!visited[neighbor] && buckets[neighbor] == bucket) {
+                        visited[neighbor] = true
+                        queue[tail++] = neighbor
                     }
                 }
             }
-
-            if (componentSize < minComponentPixels) continue
-
-            var saturatedInBounds = 0
-            for (gy in minY..maxY) {
-                for (gx in minX..maxX) {
-                    if (buckets[gy * gridWidth + gx] >= 0) saturatedInBounds++
-                }
+            if (count >= minComponentPixels) {
+                regions.add(Region(bucket, minX, minY, maxX, maxY, count))
             }
-            val confidence = if (saturatedInBounds > 0) {
-                componentSize.toFloat() / saturatedInBounds.toFloat()
-            } else 0f
-
-            val product = createDemoProduct(
-                bucket = bucket,
-                confidence = confidence,
-                left = (left + minX * step).toFloat(),
-                top = (top + minY * step).toFloat(),
-                right = (left + (maxX + 1) * step).coerceAtMost(right).toFloat(),
-                bottom = (top + (maxY + 1) * step).coerceAtMost(bottom).toFloat()
-            )
-            detections.add(product)
         }
 
-        return detections.sortedWith(compareBy<RecognizedProduct> { it.top }.thenBy { it.left })
+        // Join nearby fragments of the SAME object (e.g. highlights/shadows on one
+        // banana bunch), but keep separated same-colour objects as separate entries.
+        var changed = true
+        while (changed) {
+            changed = false
+            outer@ for (i in regions.indices) {
+                for (j in i + 1 until regions.size) {
+                    val a = regions[i]
+                    val b = regions[j]
+                    if (a.bucket != b.bucket) continue
+                    val gapX = maxOf(0, maxOf(a.minX, b.minX) - minOf(a.maxX, b.maxX) - 1)
+                    val gapY = maxOf(0, maxOf(a.minY, b.minY) - minOf(a.maxY, b.maxY) - 1)
+                    val smallerSide = minOf(
+                        minOf(a.maxX - a.minX + 1, a.maxY - a.minY + 1),
+                        minOf(b.maxX - b.minX + 1, b.maxY - b.minY + 1)
+                    ).coerceAtLeast(1)
+                    val mergeGap = maxOf(2, (smallerSide * 0.16f).toInt())
+                    if (gapX <= mergeGap && gapY <= mergeGap) {
+                        a.minX = minOf(a.minX, b.minX)
+                        a.minY = minOf(a.minY, b.minY)
+                        a.maxX = maxOf(a.maxX, b.maxX)
+                        a.maxY = maxOf(a.maxY, b.maxY)
+                        a.pixels += b.pixels
+                        regions.removeAt(j)
+                        changed = true
+                        break@outer
+                    }
+                }
+            }
+        }
+
+        // Hard safety limit: no photo can produce more than four entries.
+        return regions.sortedByDescending { it.pixels }
+            .take(4)
+            .map { region ->
+                val boxArea = ((region.maxX - region.minX + 1) *
+                    (region.maxY - region.minY + 1)).coerceAtLeast(1)
+                createDemoProduct(
+                    bucket = region.bucket,
+                    confidence = (region.pixels.toFloat() / boxArea.toFloat()),
+                    left = (left + region.minX * step).toFloat(),
+                    top = (top + region.minY * step).toFloat(),
+                    right = (left + (region.maxX + 1) * step).coerceAtMost(right).toFloat(),
+                    bottom = (top + (region.maxY + 1) * step).coerceAtMost(bottom).toFloat()
+                )
+            }
+            .sortedWith(compareBy<RecognizedProduct> { it.top }.thenBy { it.left })
     }
 
     private fun createDemoProduct(
