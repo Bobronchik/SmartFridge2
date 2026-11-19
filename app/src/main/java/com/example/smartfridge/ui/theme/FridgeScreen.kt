@@ -57,7 +57,7 @@ fun FridgeScreen(
     state: FridgeUiState,
     onSearch: (String) -> Unit,
     onCategory: (String?) -> Unit,
-    onScan: () -> Unit,
+    onScan: () -> Unit,\n    onTakePhoto: () -> Unit = {},
     onAdd: () -> Unit,
     onDelete: (FridgeProduct) -> Unit = {},
     onUpdateProduct: (FridgeProduct) -> Unit = {},
@@ -993,11 +993,44 @@ private fun DebugPanel(
         Text("Диагностика", color = MaterialTheme.colorScheme.onSurface, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Состояние подключённых компонентов", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         DebugRow("База Room", "Подключена", true)
-        DebugRow("YOLO", "Инициализируется в ML pipeline", true)
-        DebugRow("PaddleOCR", "Инициализируется в ML pipeline", true)
-        DebugRow("OpenCV", "Вызов initLocal() при запуске", true)
+        DebugRow("YOLO / PaddleOCR", "Не используются в DEV-фото", true)
+        DebugRow("Gemini", if (state.geminiPhotoResult != null) "Ответ получен / ошибка показана ниже" else "Ожидание фото", true)
         DebugRow("Камера", if (state.cameraConnected) "Подключена" else "Не подключена", state.cameraConnected)
-        DebugRow("Сканирование", if (state.scanning) "Выполняется" else "Ожидание", !state.scanning)
+        HorizontalDivider(color = Color(0xFFE8ECE7))
+        Text("Проверка камеры и Gemini", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text("Получаем один JPEG с /capture. Оригинальное фото отправляется напрямую в Gemini — без YOLO, OCR и обрезки.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
+        Button(
+            onClick = onTakePhoto,
+            enabled = !state.photoBusy,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            if (state.photoBusy) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                Spacer(Modifier.width(9.dp))
+                Text("Получаю фото / анализирую…")
+            } else {
+                Text("📷  Сделать фото и отправить в Gemini")
+            }
+        }
+        state.lastImage?.let { bitmap ->
+            Text("Последнее фото с ESP32-CAM", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Последний снимок с камеры",
+                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Fit
+            )
+        }
+        state.geminiPhotoResult?.let { result ->
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(result, modifier = Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+        }
         HorizontalDivider(color = Color(0xFFE8ECE7))
         Text("Данные сейчас", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         DebugRow("Продуктов", state.products.size.toString(), true)
