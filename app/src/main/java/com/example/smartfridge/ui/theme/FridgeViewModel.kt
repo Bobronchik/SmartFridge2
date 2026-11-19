@@ -138,56 +138,57 @@ class FridgeViewModel(
                     ?: throw IllegalStateException("Камера не вернула изображение. Проверь адрес /capture.")
                 lastImage.value = bitmap
                 cameraConnected.value = true
+                geminiPhotoResult.value = "Фото получено. YOLO и Gemini одновременно анализируют один снимок…"
 
-                geminiPhotoResult.value = "Фото получено. YOLO и Gemini анализируют один снимок параллельно…"
-                coroutineScope {
-                    // DEV YOLO path is strictly local: it must not call the per-crop Gemini verifier.
-                    val yoloTask = async(Dispatchers.Default) { repository.analyzeLocal(bitmap) }
+                // Both engines receive the exact same camera frame. The review table
+                // is opened only after both have finished or Gemini has timed out.
+                val outcomes = coroutineScope {
+                    val yoloTask = async(Dispatchers.Default) {
+                        runCatching { repository.analyzeLocal(bitmap) }
+                    }
                     val geminiTask = async(Dispatchers.IO) {
                         runCatching { GeminiPhotoAnalyzer(apiKey).analyze(bitmap) }
                     }
+                    yoloTask.await() to geminiTask.await()
+                }
 
-                    val localProducts = try {
-                        yoloTask.await()
-                    } catch (error: Exception) {
-                        android.util.Log.e("FridgeViewModel", "DEV local YOLO failed", error)
-                        emptyList()
-                    }
+                val yoloResult = outcomes.first
+                val geminiResult = outcomes.second
+                val localProducts = yoloResult.getOrElse { error ->
+                    android.util.Log.e("FridgeViewModel", "YOLO analysis failed", error)
+                    emptyList()
+                }
+                previewDetections.value = localProducts
 
-                    previewDetections.value = localProducts
-                    pendingProducts.value = localProducts
-                    val yoloSummary = if (localProducts.isEmpty()) {
-                        "YOLO: продукты не обнаружены."
-                    } else {
-                        "YOLO обнаружила:\n" + localProducts.mapIndexed { index, item ->
-                            "${index + 1}. ${item.name} — ${(item.confidence * 100).toInt()}% уверенности"
-                        }.joinToString("\n")
-                    }
-                    // Show local result immediately; do not make the user wait for a blocked cloud API.
-                    geminiPhotoResult.value = "$yoloSummary\n\nGemini: анализируется…"
+                val finalProducts = if (geminiResult.isSuccess) {
+                    val geminiText = geminiResult.getOrThrow()
+                    val geminiNames = parseGeminiProductNames(geminiText)
+                    mergeYoloAndGemini(localProducts, geminiNames)
+                } else {
+                    android.util.Log.w("FridgeViewModel", "Gemini unavailable; using YOLO results", geminiResult.exceptionOrNull())
+                    localProducts
+                }
 
-                    val geminiOutcome = geminiTask.await()
-                    geminiPhotoResult.value = geminiOutcome.fold(
-                        onSuccess = { geminiText ->
-                            val yoloNames = localProducts.map { it.name.lowercase().trim() }.toSet()
-                            val geminiNames = geminiText.lines()
-                                .map { it.lowercase().trim() }
-                                .filter { it.isNotBlank() }
-                            val likelyMatch = yoloNames.isNotEmpty() &&
-                                geminiNames.any { line -> yoloNames.any { name -> line.contains(name) || name.contains(line) } }
-                            val comparison = when {
-                                localProducts.isEmpty() -> "Сравнение: YOLO ничего не обнаружила; проверь ответ Gemini."
-                                likelyMatch -> "Сравнение: есть совпадение по названиям. Проверь результат перед сохранением."
-                                else -> "Сравнение: результаты отличаются или не удалось сопоставить названия. Нужна ручная проверка."
-                            }
-                            "$yoloSummary\n\nGemini:\n$geminiText\n\n$comparison"
-                        },
-                        onFailure = { error ->
-                            android.util.Log.w("FridgeViewModel", "Gemini unavailable; local YOLO result retained", error)
-                            "$yoloSummary\n\nGemini недоступен: ${error.message ?: "ошибка запроса"}.\n" +
-                                "Используется локальный результат YOLO. Проверьте его перед сохранением."
-                        }
-                    )
+                pendingProducts.value = finalProducts
+                val yoloSummary = if (localProducts.isEmpty()) {
+                    "YOLO: продукты не обнаружены."
+                } else {
+                    "YOLO: " + localProducts.joinToString { "${it.name} (${(it.confidence * 100).toInt()}%)" }
+                }
+                val geminiSummary = geminiResult.fold(
+                    onSuccess = { "Gemini: ${it.trim()}" },
+                    onFailure = { "Gemini недоступен: ${it.message ?: "тайм-аут или ошибка сети"}" }
+                )
+                val comparison = when {
+                    geminiResult.isFailure -> "Итог: показан локальный результат YOLO. Проверьте названия в таблице."
+                    finalProducts.isEmpty() -> "Итог: модели не нашли уверенно различимые продукты."
+                    else -> "Итог: результаты двух моделей объединены. Проверьте таблицу и нажмите «Добавить в холодильник»."
+                }
+                geminiPhotoResult.value = "$yoloSummary\n\n$geminiSummary\n\n$comparison"
+                if (finalProducts.isEmpty()) {
+                    message.value = "Продукты не распознаны. Попробуйте снять упаковки крупнее и при хорошем освещении."
+                } else {
+                    message.value = "Проверьте общую таблицу распознавания перед добавлением."
                 }
             } catch (e: Exception) {
                 android.util.Log.e("FridgeViewModel", "DEV camera photo failed", e)
@@ -196,6 +197,70 @@ class FridgeViewModel(
                 photoBusy.value = false
             }
         }
+    }
+
+    private fun parseGeminiProductNames(response: String): List<Pair<String, Float>> {
+        val cleaned = response.trim()
+            .removePrefix("```json").removePrefix("```")
+            .removeSuffix("```").trim()
+        val jsonText = cleaned.substringAfter("{", "").let { if (it.isBlank()) "" else "{$it" }
+        if (jsonText.isNotBlank()) {
+            runCatching {
+                val array = org.json.JSONObject(jsonText).optJSONArray("products")
+                    ?: org.json.JSONArray()
+                return (0 until array.length()).mapNotNull { index ->
+                    val item = array.optJSONObject(index) ?: return@mapNotNull null
+                    val name = item.optString("name").trim()
+                    if (name.isBlank()) null else name to item.optDouble("quantity", 1.0).toFloat().coerceAtLeast(1f)
+                }
+            }
+        }
+        // Backward-compatible parser for plain-text Gemini replies.
+        return response.lines().mapNotNull { line ->
+            val name = line.replace(Regex("^\\s*[-*•0-9.)]+\\s*"), "").trim()
+            if (name.length < 3 || name.contains("не видно", true) || name.contains("продуктов нет", true)) null
+            else name.substringBefore("—").substringBefore(":").trim().takeIf { it.length >= 3 }?.let { it to 1f }
+        }.distinctBy { it.first.lowercase() }
+    }
+
+    private fun mergeYoloAndGemini(
+        yolo: List<RecognizedProduct>,
+        gemini: List<Pair<String, Float>>
+    ): List<RecognizedProduct> {
+        if (gemini.isEmpty()) return yolo.filter { it.confidence >= 0.55f }
+        val used = mutableSetOf<Int>()
+        val merged = gemini.map { (geminiName, quantity) ->
+            val normalized = geminiName.lowercase().filter { it.isLetterOrDigit() }
+            val matchIndex = yolo.indices.firstOrNull { index ->
+                index !in used && run {
+                    val yoloName = yolo[index].name.lowercase().filter { it.isLetterOrDigit() }
+                    yoloName == normalized || yoloName.contains(normalized) || normalized.contains(yoloName)
+                }
+            }
+            if (matchIndex != null) {
+                used += matchIndex
+                yolo[matchIndex].copy(name = geminiName, quantity = quantity)
+            } else {
+                val expiry = System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000
+                RecognizedProduct(
+                    name = geminiName,
+                    category = geminiName,
+                    icon = "📦",
+                    brand = null,
+                    quantity = quantity,
+                    expiresAt = expiry,
+                    isExactDate = false,
+                    confidence = 0.5f
+                )
+            }
+        }
+        // Keep a YOLO-only object only when its visual confidence is high; do not
+        // let a confident but mismatched "dried fruit" overwrite Gemini's milk/chocolate.
+        val highConfidenceYoloOnly = yolo.filterIndexed { index, item ->
+            index !in used && item.confidence >= 0.80f &&
+                merged.none { it.name.equals(item.name, ignoreCase = true) }
+        }
+        return (merged + highConfidenceYoloOnly).distinctBy { it.name.lowercase().trim() }
     }
 
     fun scan(address: String, intervalMinutes: Int = 1) {
