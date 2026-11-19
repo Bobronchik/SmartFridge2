@@ -30,6 +30,9 @@ class SmartFridgeRepository(
     // Recognition is deliberately read-only. The caller must ask the user to review
     // the result and call saveRecognizedProducts only after explicit confirmation.
     suspend fun analyze(bitmap: Bitmap): List<RecognizedProduct> = pipeline.analyze(bitmap)
+    // DEV comparison uses YOLO + OCR only; full-frame Gemini runs separately in parallel.
+    suspend fun analyzeLocal(bitmap: Bitmap): List<RecognizedProduct> =
+        pipeline.analyze(bitmap, allowGeminiVerification = false)
 
     suspend fun saveRecognizedProducts(products: List<RecognizedProduct>): Int {
         if (products.isEmpty()) return 0
