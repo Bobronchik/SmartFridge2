@@ -58,6 +58,7 @@ fun FridgeScreen(
     onCategory: (String?) -> Unit,
     onScan: () -> Unit,
     onTakePhoto: () -> Unit = {},
+    onPhoneCamera: () -> Unit = {},
     onAdd: () -> Unit,
     onDelete: (FridgeProduct) -> Unit = {},
     onUpdateProduct: (FridgeProduct) -> Unit = {},
@@ -146,6 +147,7 @@ fun FridgeScreen(
                 onSearch = onSearch,
                 onCategory = onCategory,
                 onAdd = onAdd,
+                onPhoneCamera = onPhoneCamera,
                 onDelete = { productToDelete = it },
                 onEdit = { productToEdit = it },
                 onUpdateProduct = onUpdateProduct,
@@ -234,6 +236,7 @@ private fun FridgeHome(
     onSearch: (String) -> Unit,
     onCategory: (String?) -> Unit,
     onAdd: () -> Unit,
+    onPhoneCamera: () -> Unit,
     onDelete: (FridgeProduct) -> Unit,
     onEdit: (FridgeProduct) -> Unit,
     onUpdateProduct: (FridgeProduct) -> Unit,
@@ -371,6 +374,16 @@ private fun FridgeHome(
                         }
                     }
                 }
+            }
+        }
+
+        item {
+            OutlinedButton(
+                onClick = onPhoneCamera,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("📷 Сфотографировать телефоном")
             }
         }
 
