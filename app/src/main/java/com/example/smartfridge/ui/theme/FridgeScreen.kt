@@ -48,8 +48,7 @@ private val CardWhite = Color(0xFFFFFFFF)
 private enum class MainTab(val title: String, val icon: String) {
     FRIDGE("Холодильник", "🥬"),
     RECIPES("Рецепты", "🍲"),
-    SETTINGS("Настройки", "⚙"),
-    DEBUG("Dev", "⌘")
+    SETTINGS("Настройки", "⚙")
 }
 
 @Composable
@@ -171,13 +170,6 @@ fun FridgeScreen(
                 cameraScanIntervalMinutes = cameraScanIntervalMinutes,
                 onCameraScanIntervalChange = onCameraScanIntervalChange,
                 onSaveInterval = onSaveCameraInterval
-            )
-            MainTab.DEBUG -> DebugPanel(
-                padding = scaffoldPadding,
-                state = state,
-                expiringCount = expiringCount,
-                expiredCount = expiredCount,
-                onTakePhoto = onTakePhoto
             )
         }
     }
