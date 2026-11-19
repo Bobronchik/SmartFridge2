@@ -278,8 +278,7 @@ class FridgeViewModel(
                 lastImage.value = bitmap
                 cameraConnected.value = false
                 message.value = "Фото получено. Распознаём продукт…"
-                val recognized = classifyDemoColor(bitmap)
-                val results = recognized?.let { listOf(it) } ?: emptyList()
+                val results = classifyDemoColors(bitmap)
                 previewDetections.value = results
                 pendingProducts.value = results
                 message.value = if (results.isEmpty()) {
@@ -318,7 +317,7 @@ class FridgeViewModel(
                     } else {
                         cameraConnected.value = true
                         lastImage.value = bitmap
-                        val frameProducts = classifyDemoColor(bitmap)?.let { listOf(it) } ?: emptyList()
+                        val frameProducts = classifyDemoColors(bitmap)
                         previewDetections.value = frameProducts
                         frameResults.add(frameProducts)
                     }
@@ -344,53 +343,118 @@ class FridgeViewModel(
 
 
     /**
-     * Jury demo mode: one item is presented at a time.
-     * The central camera region is classified by its dominant saturated HSV hue.
-     * This is intentionally isolated to the demo branch; the training branch keeps YOLO.
+     * Jury demo mode: find separate connected color regions in one photo.
+     * HSV thresholds and color-to-product mapping are unchanged.
+     * Each sufficiently large region becomes one detected product.
      */
-    private fun classifyDemoColor(bitmap: Bitmap): RecognizedProduct? {
+    private fun classifyDemoColors(bitmap: Bitmap): List<RecognizedProduct> {
         val left = (bitmap.width * 0.20f).toInt()
         val top = (bitmap.height * 0.20f).toInt()
         val right = (bitmap.width * 0.80f).toInt().coerceAtLeast(left + 1)
         val bottom = (bitmap.height * 0.80f).toInt().coerceAtLeast(top + 1)
-        val hsv = FloatArray(3)
-        val votes = IntArray(4)
-        var saturatedPixels = 0
         val step = maxOf(2, minOf(bitmap.width, bitmap.height) / 240)
+        val gridWidth = ((right - left + step - 1) / step).coerceAtLeast(1)
+        val gridHeight = ((bottom - top + step - 1) / step).coerceAtLeast(1)
+        val total = gridWidth * gridHeight
+        val buckets = IntArray(total) { -1 }
+        val hsv = FloatArray(3)
 
-        var y = top
-        while (y < bottom) {
-            var x = left
-            while (x < right) {
+        for (gy in 0 until gridHeight) {
+            for (gx in 0 until gridWidth) {
+                val x = (left + gx * step).coerceAtMost(bitmap.width - 1)
+                val y = (top + gy * step).coerceAtMost(bitmap.height - 1)
                 Color.colorToHSV(bitmap.getPixel(x, y), hsv)
-                val hue = hsv[0]
-                val saturation = hsv[1]
-                val value = hsv[2]
-                if (saturation >= 0.32f && value >= 0.18f) {
-                    saturatedPixels++
-                    val bucket = when {
-                        hue >= 42f && hue < 69f -> 0 // yellow: banana
-                        hue >= 15f && hue < 42f -> 1 // orange: orange
-                        hue >= 69f && hue < 170f -> 2 // green: cucumber
-                        hue >= 345f || hue < 15f -> 3 // red: pepper
+                if (hsv[1] >= 0.32f && hsv[2] >= 0.18f) {
+                    buckets[gy * gridWidth + gx] = when {
+                        hsv[0] >= 42f && hsv[0] < 69f -> 0 // yellow: banana
+                        hsv[0] >= 15f && hsv[0] < 42f -> 1 // orange: orange
+                        hsv[0] >= 69f && hsv[0] < 170f -> 2 // green: cucumber
+                        hsv[0] >= 345f || hsv[0] < 15f -> 3 // red: pepper
                         else -> -1
                     }
-                    if (bucket >= 0) {
-                        votes[bucket]++
-                    }
                 }
-                x += step
             }
-            y += step
         }
 
-        if (saturatedPixels < 20) return null
-        val winner = votes.indices.maxByOrNull { votes[it] } ?: return null
-        val share = votes[winner].toFloat() / saturatedPixels.toFloat()
-        // Reject mixed/ambiguous scenes instead of inventing a product label.
-        if (share < 0.34f) return null
+        val visited = BooleanArray(total)
+        val queue = IntArray(total)
+        val detections = mutableListOf<RecognizedProduct>()
+        val minComponentPixels = 20
 
-        val (name, category, icon, shelfLifeDays) = when (winner) {
+        for (seed in 0 until total) {
+            val bucket = buckets[seed]
+            if (bucket < 0 || visited[seed]) continue
+
+            var head = 0
+            var tail = 0
+            queue[tail++] = seed
+            visited[seed] = true
+            var minX = seed % gridWidth
+            var maxX = minX
+            var minY = seed / gridWidth
+            var maxY = minY
+            var componentSize = 0
+
+            while (head < tail) {
+                val current = queue[head++]
+                val x = current % gridWidth
+                val y = current / gridWidth
+                componentSize++
+                minX = minOf(minX, x)
+                maxX = maxOf(maxX, x)
+                minY = minOf(minY, y)
+                maxY = maxOf(maxY, y)
+
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
+                        if (dx == 0 && dy == 0) continue
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (nx !in 0 until gridWidth || ny !in 0 until gridHeight) continue
+                        val neighbor = ny * gridWidth + nx
+                        if (!visited[neighbor] && buckets[neighbor] == bucket) {
+                            visited[neighbor] = true
+                            queue[tail++] = neighbor
+                        }
+                    }
+                }
+            }
+
+            if (componentSize < minComponentPixels) continue
+
+            var saturatedInBounds = 0
+            for (gy in minY..maxY) {
+                for (gx in minX..maxX) {
+                    if (buckets[gy * gridWidth + gx] >= 0) saturatedInBounds++
+                }
+            }
+            val confidence = if (saturatedInBounds > 0) {
+                componentSize.toFloat() / saturatedInBounds.toFloat()
+            } else 0f
+
+            val product = createDemoProduct(
+                bucket = bucket,
+                confidence = confidence,
+                left = (left + minX * step).toFloat(),
+                top = (top + minY * step).toFloat(),
+                right = (left + (maxX + 1) * step).coerceAtMost(right).toFloat(),
+                bottom = (top + (maxY + 1) * step).coerceAtMost(bottom).toFloat()
+            )
+            detections.add(product)
+        }
+
+        return detections.sortedWith(compareBy<RecognizedProduct> { it.top }.thenBy { it.left })
+    }
+
+    private fun createDemoProduct(
+        bucket: Int,
+        confidence: Float,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float
+    ): RecognizedProduct {
+        val (name, category, icon, shelfLifeDays) = when (bucket) {
             0 -> arrayOf("Банан", "Фрукты", "🍌", "5")
             1 -> arrayOf("Апельсин", "Фрукты", "🍊", "14")
             2 -> arrayOf("Огурец", "Овощи", "🥒", "7")
@@ -412,11 +476,11 @@ class FridgeViewModel(
             quantity = 1f,
             expiresAt = expiry,
             isExactDate = false,
-            left = 0f,
-            top = 0f,
-            right = bitmap.width.toFloat(),
-            bottom = bitmap.height.toFloat(),
-            confidence = share.coerceIn(0f, 1f)
+            left = left,
+            top = top,
+            right = right,
+            bottom = bottom,
+            confidence = confidence.coerceIn(0f, 1f)
         )
     }
 
