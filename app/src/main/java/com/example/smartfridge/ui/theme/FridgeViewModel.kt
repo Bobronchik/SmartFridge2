@@ -120,25 +120,61 @@ class FridgeViewModel(
     fun setMessage(value: String?) { message.value = value }
 
     /**
-     * DEV: fetch one untouched JPEG frame and send that same frame to Gemini.
-     * Does not call FridgeVisionPipeline, YOLO or PaddleOCR.
+     * DEV: take one camera frame, always run local YOLO/OCR first, then try
+     * Gemini as an optional full-frame second opinion. Local results remain
+     * available when Gemini is missing, blocked by region, or temporarily down.
      */
     fun capturePhotoForGemini(address: String, apiKey: String) {
         if (photoBusy.value) return
         viewModelScope.launch {
             photoBusy.value = true
             geminiPhotoResult.value = null
+            pendingProducts.value = emptyList()
             try {
                 val bitmap = repository.capture(address.trim())
                     ?: throw IllegalStateException("Камера не вернула изображение. Проверь адрес /capture.")
                 lastImage.value = bitmap
                 cameraConnected.value = true
-                geminiPhotoResult.value = "Фото получено. Отправляю оригинал в Gemini…"
-                val result = GeminiPhotoAnalyzer(apiKey).analyze(bitmap)
-                geminiPhotoResult.value = result
+
+                var localProducts: List<RecognizedProduct> = emptyList()
+                var localError: String? = null
+                geminiPhotoResult.value = "Фото получено. Запускаю локальную YOLO…"
+                try {
+                    localProducts = repository.analyze(bitmap)
+                    previewDetections.value = localProducts
+                    pendingProducts.value = localProducts
+                } catch (error: Exception) {
+                    localError = error.message ?: "ошибка локального распознавания"
+                    android.util.Log.e("FridgeViewModel", "DEV local YOLO failed", error)
+                }
+
+                geminiPhotoResult.value = "Локальная YOLO завершена. Проверяю доступность Gemini…"
+                try {
+                    val geminiResult = GeminiPhotoAnalyzer(apiKey).analyze(bitmap)
+                    val localSummary = if (localProducts.isEmpty()) {
+                        "Локальная YOLO не обнаружила продукты."
+                    } else {
+                        "Локальная YOLO также обнаружила: " +
+                            localProducts.joinToString { "${it.name} × ${it.quantity.toInt().coerceAtLeast(1)}" } + "."
+                    }
+                    geminiPhotoResult.value = "Анализ Gemini:\n$geminiResult\n\n$localSummary"
+                } catch (geminiError: Exception) {
+                    android.util.Log.w("FridgeViewModel", "Gemini unavailable; keeping local YOLO results", geminiError)
+                    val localSummary = when {
+                        localProducts.isNotEmpty() ->
+                            localProducts.mapIndexed { index, item ->
+                                "${index + 1}. ${item.name} — количество: ${item.quantity.toInt().coerceAtLeast(1)}"
+                            }.joinToString("\n")
+                        localError != null -> "Локальная YOLO тоже завершилась ошибкой: $localError"
+                        else -> "Локальная YOLO не обнаружила продукты."
+                    }
+                    geminiPhotoResult.value =
+                        "Gemini недоступен: ${geminiError.message ?: "ошибка запроса"}.\n" +
+                            "Используется локальная YOLO:\n$localSummary"
+                }
             } catch (e: Exception) {
-                android.util.Log.e("FridgeViewModel", "DEV photo/Gemini failed", e)
-                geminiPhotoResult.value = "Ошибка: ${e.message ?: "не удалось получить ответ Gemini"}"
+                android.util.Log.e("FridgeViewModel", "DEV camera photo failed", e)
+                geminiPhotoResult.value = "Ошибка камеры: ${e.message ?: "не удалось получить фотографию"}"
             } finally {
                 photoBusy.value = false
             }
