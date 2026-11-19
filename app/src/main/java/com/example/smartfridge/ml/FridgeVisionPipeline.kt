@@ -31,11 +31,13 @@ data class RecognizedProduct(
 class FridgeVisionPipeline(
     private val yoloDetector: YOLODetector,
     private val ocr: PaddleOCR,
-    private val productDao: ProductDao
+    private val productDao: ProductDao,
+    private val geminiVerifier: GeminiProductVerifier? = null
 ) {
     companion object {
         private const val TAG = "FridgeVisionPipeline"
         private const val CROP_PADDING_RATIO = 0.08f
+        private const val GEMINI_VERIFY_CONFIDENCE = 0.55f
         private val NON_FOOD_LABELS = setOf(
             "Средства гигиены",
             "Канцелярия",
@@ -68,29 +70,40 @@ class FridgeVisionPipeline(
                 // YOLO predicts a broad category, not necessarily an exact catalog product.
                 // Only accept an exact catalog-name match; otherwise preserve the detected class.
                 val crop = cropDetection(bitmap, detection)
-                val ocrText = try {
-                    val ocrResult = ocr.recognize(crop)
-                    Log.d(
-                        TAG,
-                        "OCR ${detection.label} conf=${detection.confidence}: " +
-                            "lines=${ocrResult.lineCount}, crop=${crop.width}x${crop.height}, " +
-                            "text=${ocrResult.results.joinToString(" | ") { it.text }}"
-                    )
-                    ocrResult.results.joinToString("\n") { it.text }
-                } catch (e: Exception) {
-                    Log.e(
-                        TAG,
-                        "OCR failed for ${detection.label}, crop=${crop.width}x${crop.height}",
-                        e
-                    )
-                    ""
+                var ocrText = ""
+                var verifiedLabel: String? = null
+                try {
+                    ocrText = try {
+                        val ocrResult = ocr.recognize(crop)
+                        Log.d(
+                            TAG,
+                            "OCR ${detection.label} conf=${detection.confidence}: " +
+                                "lines=${ocrResult.lineCount}, crop=${crop.width}x${crop.height}, " +
+                                "text=${ocrResult.results.joinToString(" | ") { it.text }}"
+                        )
+                        ocrResult.results.joinToString("\n") { it.text }
+                    } catch (e: Exception) {
+                        Log.e(
+                            TAG,
+                            "OCR failed for ${detection.label}, crop=${crop.width}x${crop.height}",
+                            e
+                        )
+                        ""
+                    }
+
+                    // Ask Gemini only for uncertain YOLO results or when package OCR is empty.
+                    // If Gemini is unavailable or uncertain, the original YOLO result is retained.
+                    if (detection.confidence < GEMINI_VERIFY_CONFIDENCE || ocrText.isBlank()) {
+                        verifiedLabel = geminiVerifier?.verify(crop, detection.label, ocrText)
+                    }
                 } finally {
                     crop.recycle()
                 }
 
+                val finalLabel = verifiedLabel ?: detection.label
                 val expiry = ExpiryDateParser.findExpiryDate(ocrText)
-                val product = findCatalogProduct(detection.label, ocrText, catalog)
-                    ?: createFallbackProduct(detection.label)
+                val product = findCatalogProduct(finalLabel, ocrText, catalog)
+                    ?: createFallbackProduct(finalLabel)
                 val finalExpiry = expiry
                     ?: calculateEstimatedExpiry(product.defaultShelfLifeDays)
 
