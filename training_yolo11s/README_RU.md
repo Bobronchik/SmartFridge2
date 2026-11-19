@@ -75,17 +75,24 @@ dataset/
 
 Самый быстрый вариант — Google Colab с GPU (Runtime → Change runtime type → T4 GPU), либо компьютер с NVIDIA GPU.
 
-В терминале/ячейке Colab:
+В Google Colab сначала включи GPU: Runtime → Change runtime type → T4 GPU. Затем выполни:
 
 ```bash
-pip install -r requirements.txt
-python train_yolo11s.py --dataset ./dataset
+!git clone -b smartfridge-2-redesign https://github.com/Bobronchik/SmartFridge2.git
+%cd SmartFridge2
+!pip install -r training_yolo11s/requirements.txt
 ```
 
-Если у тебя есть оригинальный checkpoint именно этой 17-классовой модели:
+Загрузи папку `dataset` в корень проекта (в Colab — в `/content/SmartFridge2/dataset`), чтобы рядом с папками `app` и `training_yolo11s` появилась папка `dataset`. Затем запусти:
 
 ```bash
-python train_yolo11s.py --dataset ./dataset --weights ./best.pt
+!python training_yolo11s/train_yolo11s.py --dataset ./dataset
+```
+
+Если у тебя есть оригинальный checkpoint именно этой 17-классовой модели, загрузи его в корень проекта и запусти:
+
+```bash
+!python training_yolo11s/train_yolo11s.py --dataset ./dataset --weights ./best.pt
 ```
 
 Скрипт проверит структуру датасета, ID классов и разметку, обучит модель, выполнит validation и экспортирует TFLite 640×640. Он остановится, если в train отсутствует один из 17 классов.
