@@ -102,7 +102,14 @@ class FridgeVisionPipeline(
                     crop.recycle()
                 }
 
-                val finalLabel = verifiedLabel ?: detection.label
+                // Package text is stronger evidence than a visual guess from the
+                // current 17-class detector. This is especially useful for mock products
+                // whose printed packaging clearly says MILK / CHOCOLATE.
+                val textLabel = labelFromPackageText(ocrText)
+                val finalLabel = textLabel ?: verifiedLabel ?: detection.label
+                if (textLabel != null && textLabel != detection.label) {
+                    Log.i(TAG, "OCR corrected YOLO label '${detection.label}' -> '${textLabel}'")
+                }
                 val expiry = ExpiryDateParser.findExpiryDate(ocrText)
                 val product = findCatalogProduct(finalLabel, ocrText, catalog)
                     ?: createFallbackProduct(finalLabel)
@@ -160,6 +167,40 @@ class FridgeVisionPipeline(
 
     private fun normalize(value: String): String =
         value.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
+
+    /**
+     * Corrects broad visual classes when the package itself contains a clear
+     * product word. OCR evidence is deliberately limited to explicit keywords;
+     * it never guesses a product from unrelated text.
+     */
+    private fun labelFromPackageText(text: String): String? {
+        val value = normalize(text)
+        if (value.isBlank()) return null
+
+        val rules = listOf(
+            "Шоколад" to listOf("шоколад", "chocolate", "cocoa", "cacao", "milkchocolate"),
+            "Молоко" to listOf("молоко", "milk", "wholemilk", "skimmedmilk", "dairymilk"),
+            "Сухофрукты" to listOf("сухофрукт", "driedfruit", "raisins", "raisin", "dates", "prunes"),
+            "Конфеты" to listOf("конфет", "candy", "candies", "sweets", "bonbon"),
+            "Консервы" to listOf("консервы", "canned", "tinned", "cannedfood"),
+            "Десерт" to listOf("десерт", "dessert", "pudding", "mousse"),
+            "Напитки" to listOf("напиток", "beverage", "juice", "water", "soda", "drink"),
+            "Жвачка" to listOf("жвачка", "chewinggum", "bubblegum"),
+            "Растворимые напитки" to listOf("растворимыйнапиток", "instantcoffee", "instantdrink"),
+            "Лапша быстрого приготовления" to listOf("лапша", "instantnoodles", "ramen", "noodles"),
+            "Средства гигиены" to listOf("шампунь", "soap", "shampoo", "toothpaste"),
+            "Снеки" to listOf("снеки", "snack", "chips", "crisps", "crackers"),
+            "Приправы" to listOf("приправа", "seasoning", "spice", "spices"),
+            "Алкоголь" to listOf("алкоголь", "alcohol", "beer", "wine", "vodka"),
+            "Канцелярия" to listOf("канцелярия", "stationery", "pencil", "marker"),
+            "Бумажные салфетки" to listOf("салфетки", "tissue", "napkin", "papertowel"),
+            "Сушёные продукты" to listOf("сушеныепродукты", "driedfood")
+        )
+
+        return rules.firstOrNull { (_, keywords) ->
+            keywords.any { keyword -> value.contains(normalize(keyword)) }
+        }?.first
+    }
 
     private fun createFallbackProduct(label: String): ProductCatalogEntity =
         ProductCatalogEntity(
