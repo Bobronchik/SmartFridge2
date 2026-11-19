@@ -116,3 +116,58 @@ dataset/
 - Сохраняй примеры всех классов, иначе модель может забыть ранее распознаваемые продукты.
 - Не считай высокую confidence доказательством правильного класса. Смотри confusion matrix и проверяй отдельные фотографии.
 - Никакая настройка сама по себе не исправит плохой датасет или неверный порядок class ID.
+
+
+## Быстрый готовый вариант без собственных фотографий
+
+Найден готовый checkpoint на Hugging Face:
+
+- Модель: [GroceryCheckoutDetection / best.pt](https://huggingface.co/cvtechniques/GroceryCheckoutDetection/resolve/main/best.pt)
+- Карточка и метрики: https://huggingface.co/cvtechniques/GroceryCheckoutDetection
+- Лицензия модели: MIT.
+- Архитектура: **YOLO11n, НЕ YOLO11s**.
+- 17 классов в том же порядке, что и в SmartFridge.
+- Автор сообщает mAP50 0.992 и mAP50-95 0.862 на собственном тестовом наборе.
+
+Это самый быстрый готовый кандидат, который можно проверить без съёмки собственных 17 классов. Но это не гарантия такой же точности на SmartFridge: автор указывает, что модель обучалась в основном на китайских упаковках и на кадрах сверху; на незнакомых товарах и другом ракурсе точность может заметно падать. Поэтому не заменяй рабочий `best.tflite` вслепую.
+
+### Проверить готовую модель в Colab
+
+Включи T4 GPU и выполни:
+
+```python
+!pip install ultralytics
+!wget -O grocery_checkout_best.pt https://huggingface.co/cvtechniques/GroceryCheckoutDetection/resolve/main/best.pt
+```
+
+Загрузи несколько тестовых фотографий своих макетов (можно использовать уже имеющиеся фото, новые специально делать не нужно), затем:
+
+```python
+from ultralytics import YOLO
+model = YOLO("grocery_checkout_best.pt")
+results = model.predict(source="/content/test_images", imgsz=640, conf=0.20, save=True)
+```
+
+Если названия и рамки на твоих фотографиях лучше, чем у текущей модели, экспортируй кандидат:
+
+```python
+model.export(format="tflite", imgsz=640, int8=False)
+```
+
+Полученный TFLite сначала сохрани отдельно и сравни на тех же изображениях. Только после успешной проверки замени `app/src/main/assets/best.tflite`.
+
+### Совпадение классов
+
+Порядок классов готовой модели совпадает с Android-списком:
+
+0 alcohol, 1 candy, 2 canned_food, 3 chocolate, 4 dessert, 5 dried_food, 6 dried_fruit, 7 drink, 8 gum, 9 instant_drink, 10 instant_noodles, 11 milk, 12 personal_hygiene, 13 puffed_food, 14 seasoner, 15 stationery, 16 tissue.
+
+В Android используются более понятные подписи: `puffed_food` отображается как «Снеки», `tissue` — как «Бумажные салфетки». Не переставляй class ID.
+
+### Готовый датасет, если решим именно дообучать YOLO11s
+
+- [Roboflow Grocery Goods — 9,616 изображений](https://universe.roboflow.com/groceries-jxjfd/grocery-goods) — публичный датасет, но в нём 200 отдельных SKU-классов, а не готовые 17 суперклассов. Перед обучением нужно объединить ID в 17 категорий.
+- [RPC Dataset](https://rpc-dataset.github.io/) — оригинальный retail dataset: 83,739 изображений, 200 товарных классов и 17 надкатегорий. Официальная лицензия CC BY-NC-SA 4.0; архив около 15 GB.
+- [Hugging Face GroceryCheckoutDetection](https://huggingface.co/cvtechniques/GroceryCheckoutDetection) — уже обученный 17-классовый checkpoint, который быстрее проверить, чем скачивать и размечать большой набор.
+
+Для твоего требования «здесь и сейчас» сначала проверь готовый `best.pt` выше. Он позволяет обойти этап сбора и ручной разметки, а собственное дообучение YOLO11s можно сделать следующим этапом, если тест покажет, что готовая модель не подходит.
