@@ -264,6 +264,38 @@ class FridgeViewModel(
         return (merged + highConfidenceYoloOnly).distinctBy { it.name.lowercase().trim() }
     }
 
+    /**
+     * Runs the exact same demo color classifier on a photo taken with the phone camera.
+     * No ESP32 request, model, thresholds, or product mapping is changed.
+     */
+    fun scanPhoto(bitmap: Bitmap) {
+        if (scanning.value) return
+        viewModelScope.launch {
+            scanning.value = true
+            pendingProducts.value = emptyList()
+            previewDetections.value = emptyList()
+            try {
+                lastImage.value = bitmap
+                cameraConnected.value = false
+                message.value = "Фото получено. Распознаём продукт…"
+                val recognized = classifyDemoColor(bitmap)
+                val results = recognized?.let { listOf(it) } ?: emptyList()
+                previewDetections.value = results
+                pendingProducts.value = results
+                message.value = if (results.isEmpty()) {
+                    "Продукт не распознан. Попробуйте другое освещение или положение предмета."
+                } else {
+                    "Проверьте распознанный продукт перед добавлением."
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FridgeViewModel", "Phone photo scan failed", e)
+                message.value = "Не удалось распознать фото."
+            } finally {
+                scanning.value = false
+            }
+        }
+    }
+
     fun scan(address: String, intervalMinutes: Int = 1) {
         if (scanning.value) return
         viewModelScope.launch {
