@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -130,47 +132,62 @@ class FridgeViewModel(
             photoBusy.value = true
             geminiPhotoResult.value = null
             pendingProducts.value = emptyList()
+            previewDetections.value = emptyList()
             try {
                 val bitmap = repository.capture(address.trim())
                     ?: throw IllegalStateException("Камера не вернула изображение. Проверь адрес /capture.")
                 lastImage.value = bitmap
                 cameraConnected.value = true
 
-                var localProducts: List<RecognizedProduct> = emptyList()
-                var localError: String? = null
-                geminiPhotoResult.value = "Фото получено. Запускаю локальную YOLO…"
-                try {
-                    localProducts = repository.analyze(bitmap)
+                geminiPhotoResult.value = "Фото получено. YOLO и Gemini анализируют один снимок параллельно…"
+                coroutineScope {
+                    // DEV YOLO path is strictly local: it must not call the per-crop Gemini verifier.
+                    val yoloTask = async(Dispatchers.Default) { repository.analyzeLocal(bitmap) }
+                    val geminiTask = async(Dispatchers.IO) {
+                        runCatching { GeminiPhotoAnalyzer(apiKey).analyze(bitmap) }
+                    }
+
+                    val localProducts = try {
+                        yoloTask.await()
+                    } catch (error: Exception) {
+                        android.util.Log.e("FridgeViewModel", "DEV local YOLO failed", error)
+                        emptyList()
+                    }
+
                     previewDetections.value = localProducts
                     pendingProducts.value = localProducts
-                } catch (error: Exception) {
-                    localError = error.message ?: "ошибка локального распознавания"
-                    android.util.Log.e("FridgeViewModel", "DEV local YOLO failed", error)
-                }
-
-                geminiPhotoResult.value = "Локальная YOLO завершена. Проверяю доступность Gemini…"
-                try {
-                    val geminiResult = GeminiPhotoAnalyzer(apiKey).analyze(bitmap)
-                    val localSummary = if (localProducts.isEmpty()) {
-                        "Локальная YOLO не обнаружила продукты."
+                    val yoloSummary = if (localProducts.isEmpty()) {
+                        "YOLO: продукты не обнаружены."
                     } else {
-                        "Локальная YOLO также обнаружила: " +
-                            localProducts.joinToString { "${it.name} × ${it.quantity.toInt().coerceAtLeast(1)}" } + "."
+                        "YOLO обнаружила:\n" + localProducts.mapIndexed { index, item ->
+                            "${index + 1}. ${item.name} — ${(item.confidence * 100).toInt()}% уверенности"
+                        }.joinToString("\n")
                     }
-                    geminiPhotoResult.value = "Анализ Gemini:\n$geminiResult\n\n$localSummary"
-                } catch (geminiError: Exception) {
-                    android.util.Log.w("FridgeViewModel", "Gemini unavailable; keeping local YOLO results", geminiError)
-                    val localSummary = when {
-                        localProducts.isNotEmpty() ->
-                            localProducts.mapIndexed { index, item ->
-                                "${index + 1}. ${item.name} — количество: ${item.quantity.toInt().coerceAtLeast(1)}"
-                            }.joinToString("\n")
-                        localError != null -> "Локальная YOLO тоже завершилась ошибкой: $localError"
-                        else -> "Локальная YOLO не обнаружила продукты."
-                    }
-                    geminiPhotoResult.value =
-                        "Gemini недоступен: ${geminiError.message ?: "ошибка запроса"}.\n" +
-                            "Используется локальная YOLO:\n$localSummary"
+                    // Show local result immediately; do not make the user wait for a blocked cloud API.
+                    geminiPhotoResult.value = "$yoloSummary\n\nGemini: анализируется…"
+
+                    val geminiOutcome = geminiTask.await()
+                    geminiPhotoResult.value = geminiOutcome.fold(
+                        onSuccess = { geminiText ->
+                            val yoloNames = localProducts.map { it.name.lowercase().trim() }.toSet()
+                            val geminiNames = geminiText.lines()
+                                .map { it.lowercase().trim() }
+                                .filter { it.isNotBlank() }
+                            val likelyMatch = yoloNames.isNotEmpty() &&
+                                geminiNames.any { line -> yoloNames.any { name -> line.contains(name) || name.contains(line) } }
+                            val comparison = when {
+                                localProducts.isEmpty() -> "Сравнение: YOLO ничего не обнаружила; проверь ответ Gemini."
+                                likelyMatch -> "Сравнение: есть совпадение по названиям. Проверь результат перед сохранением."
+                                else -> "Сравнение: результаты отличаются или не удалось сопоставить названия. Нужна ручная проверка."
+                            }
+                            "$yoloSummary\n\nGemini:\n$geminiText\n\n$comparison"
+                        },
+                        onFailure = { error ->
+                            android.util.Log.w("FridgeViewModel", "Gemini unavailable; local YOLO result retained", error)
+                            "$yoloSummary\n\nGemini недоступен: ${error.message ?: "ошибка запроса"}.\n" +
+                                "Используется локальный результат YOLO. Проверьте его перед сохранением."
+                        }
+                    )
                 }
             } catch (e: Exception) {
                 android.util.Log.e("FridgeViewModel", "DEV camera photo failed", e)
