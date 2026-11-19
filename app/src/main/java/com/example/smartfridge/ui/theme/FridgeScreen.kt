@@ -1000,8 +1000,8 @@ private fun DebugPanel(
         DebugRow("Gemini", if (state.geminiPhotoResult != null) "Ответ получен / ошибка показана ниже" else "Ожидание фото", true)
         DebugRow("Камера", if (state.cameraConnected) "Подключена" else "Не подключена", state.cameraConnected)
         HorizontalDivider(color = Color(0xFFE8ECE7))
-        Text("Проверка камеры, YOLO и Gemini", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Text("Получаем один JPEG с /capture. Сначала фото анализируют локальные YOLO и OCR, затем Gemini пробует дать дополнительный ответ. Если Gemini недоступен, остаётся результат YOLO.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("Параллельная проверка YOLO + Gemini", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text("Получаем один JPEG с /capture и одновременно отправляем его в локальную YOLO + OCR и Gemini. Сравниваем ответы; если Gemini недоступен, показываем локальный результат YOLO.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
         Button(
             onClick = onTakePhoto,
             enabled = !state.photoBusy,
