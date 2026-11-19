@@ -323,7 +323,7 @@ class FridgeViewModel(
         val bottom = (bitmap.height * 0.80f).toInt().coerceAtLeast(top + 1)
         val hsv = FloatArray(3)
         val votes = IntArray(4)
-        var colorfulPixels = 0
+        var saturatedPixels = 0
         val step = maxOf(2, minOf(bitmap.width, bitmap.height) / 240)
 
         var y = top
@@ -335,6 +335,7 @@ class FridgeViewModel(
                 val saturation = hsv[1]
                 val value = hsv[2]
                 if (saturation >= 0.32f && value >= 0.18f) {
+                    saturatedPixels++
                     val bucket = when {
                         hue >= 42f && hue < 69f -> 0 // yellow: banana
                         hue >= 15f && hue < 42f -> 1 // orange: orange
@@ -344,7 +345,6 @@ class FridgeViewModel(
                     }
                     if (bucket >= 0) {
                         votes[bucket]++
-                        colorfulPixels++
                     }
                 }
                 x += step
@@ -352,9 +352,9 @@ class FridgeViewModel(
             y += step
         }
 
-        if (colorfulPixels < 20) return null
+        if (saturatedPixels < 20) return null
         val winner = votes.indices.maxByOrNull { votes[it] } ?: return null
-        val share = votes[winner].toFloat() / colorfulPixels.toFloat()
+        val share = votes[winner].toFloat() / saturatedPixels.toFloat()
         // Reject mixed/ambiguous scenes instead of inventing a product label.
         if (share < 0.34f) return null
 
