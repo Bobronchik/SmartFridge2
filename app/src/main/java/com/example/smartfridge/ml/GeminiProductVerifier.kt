@@ -89,12 +89,13 @@ class GeminiProductVerifier(
                             .put("maxOutputTokens", 100)
                     )
 
-                connection = (URL("$ENDPOINT?key=$apiKey").openConnection() as HttpURLConnection).apply {
+                connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 10_000
                     readTimeout = 18_000
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("x-goog-api-key", apiKey)
                 }
 
                 connection.outputStream.use { stream ->
