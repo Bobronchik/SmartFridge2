@@ -18,7 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 data class FridgeUiState(
     val products: List<FridgeProduct> = emptyList(),
@@ -48,6 +48,7 @@ class FridgeViewModel(
     private val message = MutableStateFlow<String?>(null)
     private val suggestions = MutableStateFlow<List<ProductCatalogEntity>>(emptyList())
     private var disposed = false
+    private var savingScanReview = false
 
     private val productFilters = combine(repository.products, search, category) { products, query, selectedCategory ->
         val filtered = products.filter { product ->
@@ -112,7 +113,7 @@ class FridgeViewModel(
             scanning.value = true
             pendingProducts.value = emptyList()
             previewDetections.value = emptyList()
-            val recognizedByName = linkedMapOf<String, RecognizedProduct>()
+            val recognizedAcrossFrames = mutableListOf<RecognizedProduct>()
             try {
                 // The current camera firmware exposes /capture (single JPEG), not an
                 // RTSP/WebRTC stream. Poll a small burst of frames using the user interval.
@@ -131,20 +132,27 @@ class FridgeViewModel(
                         val frameProducts = repository.analyze(bitmap)
                         previewDetections.value = frameProducts
                         frameProducts.forEach { item ->
-                            // Keep two identical products at different shelf positions separate,
-                            // while collapsing the same object seen in consecutive frames.
-                            val centerX = (item.left + item.right) / 2f
-                            val centerY = (item.top + item.bottom) / 2f
-                            val key = "${item.name.trim().lowercase()}:${(centerX / 100f).roundToInt()}:${(centerY / 100f).roundToInt()}"
-                            val previous = recognizedByName[key]
-                            if (previous == null || (!previous.isExactDate && item.isExactDate)) {
-                                recognizedByName[key] = item
+                            // Match the same physical package by its bounding box, not by a
+                            // coarse fixed-size grid. Separate packages of the same class remain.
+                            val duplicateIndex = recognizedAcrossFrames.indexOfFirst { previous ->
+                                isSamePhysicalProduct(previous, item)
+                            }
+                            if (duplicateIndex < 0) {
+                                recognizedAcrossFrames.add(item)
+                            } else {
+                                val previous = recognizedAcrossFrames[duplicateIndex]
+                                if (
+                                    (!previous.isExactDate && item.isExactDate) ||
+                                    item.confidence > previous.confidence
+                                ) {
+                                    recognizedAcrossFrames[duplicateIndex] = item
+                                }
                             }
                         }
                     }
                     if (frameIndex < 2) delay(intervalMinutes.coerceIn(1, 1440) * 60_000L)
                 }
-                val recognized = recognizedByName.values.toList()
+                val recognized = recognizedAcrossFrames.toList()
                 if (recognized.isEmpty()) {
                     message.value = "Продукты не распознаны. Попробуйте изменить освещение или положение камеры."
                 } else {
@@ -158,6 +166,33 @@ class FridgeViewModel(
                 scanning.value = false
             }
         }
+    }
+
+
+    private fun isSamePhysicalProduct(a: RecognizedProduct, b: RecognizedProduct): Boolean {
+        if (!a.name.trim().equals(b.name.trim(), ignoreCase = true)) return false
+
+        val intersectionWidth = (minOf(a.right, b.right) - maxOf(a.left, b.left)).coerceAtLeast(0f)
+        val intersectionHeight = (minOf(a.bottom, b.bottom) - maxOf(a.top, b.top)).coerceAtLeast(0f)
+        val intersection = intersectionWidth * intersectionHeight
+        val areaA = (a.right - a.left).coerceAtLeast(0f) * (a.bottom - a.top).coerceAtLeast(0f)
+        val areaB = (b.right - b.left).coerceAtLeast(0f) * (b.bottom - b.top).coerceAtLeast(0f)
+        val union = areaA + areaB - intersection
+        val iou = if (union > 0f) intersection / union else 0f
+
+        val centerAX = (a.left + a.right) / 2f
+        val centerAY = (a.top + a.bottom) / 2f
+        val centerBX = (b.left + b.right) / 2f
+        val centerBY = (b.top + b.bottom) / 2f
+        val centerDistance = sqrt(
+            (centerAX - centerBX) * (centerAX - centerBX) +
+                (centerAY - centerBY) * (centerAY - centerBY)
+        )
+        val referenceDiagonal = maxOf(
+            sqrt(areaA.coerceAtLeast(1f)),
+            sqrt(areaB.coerceAtLeast(1f))
+        )
+        return iou >= 0.30f || centerDistance <= referenceDiagonal * 0.22f
     }
 
     fun updatePendingProduct(index: Int, name: String, expiresAt: Long, isExactDate: Boolean) {
@@ -181,12 +216,14 @@ class FridgeViewModel(
     }
 
     fun confirmScanReview() {
+        if (savingScanReview) return
         val approved = pendingProducts.value.toList()
         if (approved.isEmpty()) return
         if (approved.any { it.name.isBlank() }) {
             message.value = "Укажи название для каждого распознанного продукта."
             return
         }
+        savingScanReview = true
         viewModelScope.launch {
             try {
                 repository.saveRecognizedProducts(approved)
@@ -195,6 +232,8 @@ class FridgeViewModel(
             } catch (e: Exception) {
                 android.util.Log.e("FridgeViewModel", "Saving scan review failed", e)
                 message.value = "Не удалось сохранить распознанные продукты."
+            } finally {
+                savingScanReview = false
             }
         }
     }
