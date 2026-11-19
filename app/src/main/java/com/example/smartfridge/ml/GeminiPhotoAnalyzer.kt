@@ -11,8 +11,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Sends the original camera frame directly to Gemini.
- * No YOLO, OCR, cropping or local image processing is performed.
+ * Sends a resized JPEG camera frame to Gemini for a short product summary.
+ * Local YOLO remains a separate first-stage detector in the ViewModel.
  */
 class GeminiPhotoAnalyzer(private val apiKey: String) {
     companion object {
@@ -24,18 +24,29 @@ class GeminiPhotoAnalyzer(private val apiKey: String) {
     suspend fun analyze(photo: Bitmap): String = withContext(Dispatchers.IO) {
         require(apiKey.isNotBlank()) { "Не задан GEMINI_API_KEY в local.properties" }
 
-        val imageBytes = ByteArrayOutputStream().use { output ->
-            photo.compress(Bitmap.CompressFormat.JPEG, 90, output)
-            output.toByteArray()
+        // Smaller payload reduces upload time on mobile/VPN connections.
+        val maxSide = 1024
+        val scale = minOf(1f, maxSide.toFloat() / maxOf(photo.width, photo.height))
+        val resized = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                photo,
+                (photo.width * scale).toInt().coerceAtLeast(1),
+                (photo.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else photo
+        val imageBytes = try {
+            ByteArrayOutputStream().use { output ->
+                resized.compress(Bitmap.CompressFormat.JPEG, 75, output)
+                output.toByteArray()
+            }
+        } finally {
+            if (resized !== photo) resized.recycle()
         }
         val prompt = """
-            Проанализируй фотографию холодильника и перечисли только продукты,
-            которые действительно хорошо видны. Для каждого продукта укажи
-            название и примерное количество. Если на упаковке читается срок годности,
-            укажи его, иначе напиши «не удалось прочитать».
-            Не выдумывай продукты, марки и даты. Если фото не холодильника,
-            кратко опиши, что на нём изображено.
-            Ответ дай на русском языке, структурированным списком.
+            Назови по-русски только хорошо различимые продукты на фото.
+            Для каждого укажи название и количество. Не угадывай.
+            Если продуктов не видно, так и напиши. Ответ максимум 5 коротких пунктов.
         """.trimIndent()
 
         val parts = JSONArray()
@@ -48,14 +59,14 @@ class GeminiPhotoAnalyzer(private val apiKey: String) {
             .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
             .put("generationConfig", JSONObject()
                 .put("temperature", 0.2)
-                .put("maxOutputTokens", 700))
+                .put("maxOutputTokens", 250))
 
         var connection: HttpURLConnection? = null
         try {
             connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 15_000
-                readTimeout = 60_000
+                readTimeout = 30_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("x-goog-api-key", apiKey)
