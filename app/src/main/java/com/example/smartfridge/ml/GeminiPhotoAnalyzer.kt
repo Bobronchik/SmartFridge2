@@ -44,9 +44,14 @@ class GeminiPhotoAnalyzer(private val apiKey: String) {
             if (resized !== photo) resized.recycle()
         }
         val prompt = """
-            Назови по-русски только хорошо различимые продукты на фото.
-            Для каждого укажи название и количество. Не угадывай.
-            Если продуктов не видно, так и напиши. Ответ максимум 5 коротких пунктов.
+            Ты распознаёшь продукты на фотографии для приложения SmartFridge.
+            Внимательно осмотри ВСЁ изображение, включая пластиковые макеты и игрушечные упаковки.
+            Определи каждый отдельный видимый продукт. Читай надписи на упаковке, если они различимы.
+            Не называй молоко сухофруктами и не подменяй один продукт другим.
+            Верни ТОЛЬКО валидный JSON без Markdown в формате:
+            {"products":[{"name":"Молоко","quantity":1},{"name":"Шоколад","quantity":1}]}
+            Если продуктов нет, верни {"products":[]}.
+            quantity — количество отдельных предметов, целое число. Не добавляй объяснения.
         """.trimIndent()
 
         val parts = JSONArray()
@@ -59,14 +64,15 @@ class GeminiPhotoAnalyzer(private val apiKey: String) {
             .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
             .put("generationConfig", JSONObject()
                 .put("temperature", 0.2)
-                .put("maxOutputTokens", 250))
+                .put("maxOutputTokens", 400)
+                .put("responseMimeType", "application/json"))
 
         var connection: HttpURLConnection? = null
         try {
             connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
-                connectTimeout = 6_000
-                readTimeout = 12_000
+                connectTimeout = 15_000
+                readTimeout = 45_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("x-goog-api-key", apiKey)
