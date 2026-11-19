@@ -7,6 +7,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.core.content.ContextCompat
 import com.example.smartfridge.notifications.ExpiryNotificationScheduler
 import androidx.activity.ComponentActivity
@@ -189,6 +190,15 @@ private fun SmartFridgeContent(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val phoneCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            viewModel.scanPhoto(bitmap)
+        } else {
+            viewModel.setMessage("Съёмка отменена.")
+        }
+    }
     val shoppingItems = remember {
         mutableStateListOf<String>().apply {
             addAll(preferences.getStringSet("smartfridge_shopping_list", emptySet()).orEmpty().sorted())
@@ -236,6 +246,9 @@ private fun SmartFridgeContent(
             } else {
                 viewModel.setMessage("Сначала укажи адрес камеры в Настройки.")
             }
+        },
+        onPhoneCamera = {
+            phoneCameraLauncher.launch(null)
         },
 
         onAdd = {
