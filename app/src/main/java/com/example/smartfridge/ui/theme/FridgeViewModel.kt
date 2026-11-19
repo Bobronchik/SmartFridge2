@@ -269,10 +269,10 @@ class FridgeViewModel(
             scanning.value = true
             pendingProducts.value = emptyList()
             previewDetections.value = emptyList()
-            val recognizedAcrossFrames = mutableListOf<RecognizedProduct>()
+            val frameResults = mutableListOf<List<RecognizedProduct>>()
             try {
-                // The current camera firmware exposes /capture (single JPEG), not an
-                // RTSP/WebRTC stream. Poll a small burst of frames using the user interval.
+                // ESP32-CAM exposes a single-frame /capture endpoint. Take a short burst
+                // and use local YOLO + OCR only; do not wait for a potentially unavailable Gemini call.
                 repeat(3) { frameIndex ->
                     message.value = "Кадр ${frameIndex + 1} из 3: распознаём продукты…"
                     val bitmap = repository.capture(address)
@@ -285,30 +285,15 @@ class FridgeViewModel(
                     } else {
                         cameraConnected.value = true
                         lastImage.value = bitmap
-                        val frameProducts = repository.analyze(bitmap)
+                        val frameProducts = repository.analyzeLocal(bitmap)
                         previewDetections.value = frameProducts
-                        frameProducts.forEach { item ->
-                            // Match the same physical package by its bounding box, not by a
-                            // coarse fixed-size grid. Separate packages of the same class remain.
-                            val duplicateIndex = recognizedAcrossFrames.indexOfFirst { previous ->
-                                isSamePhysicalProduct(previous, item)
-                            }
-                            if (duplicateIndex < 0) {
-                                recognizedAcrossFrames.add(item)
-                            } else {
-                                val previous = recognizedAcrossFrames[duplicateIndex]
-                                if (
-                                    (!previous.isExactDate && item.isExactDate) ||
-                                    item.confidence > previous.confidence
-                                ) {
-                                    recognizedAcrossFrames[duplicateIndex] = item
-                                }
-                            }
-                        }
+                        frameResults.add(frameProducts)
                     }
-                    if (frameIndex < 2) delay(intervalMinutes.coerceIn(1, 1440) * 60_000L)
+                    // A short pause lets the ESP32-CAM finish the next JPEG without
+                    // making the user wait the configured periodic-scan interval.
+                    if (frameIndex < 2) delay(400L)
                 }
-                val recognized = recognizedAcrossFrames.toList()
+                val recognized = aggregateFrameResults(frameResults)
                 if (recognized.isEmpty()) {
                     message.value = "Продукты не распознаны. Попробуйте изменить освещение или положение камеры."
                 } else {
@@ -324,6 +309,95 @@ class FridgeViewModel(
         }
     }
 
+
+    /**
+     * Combines detections of the same physical package across a short camera burst.
+     * Spatial matching is independent of the predicted class so a one-frame label
+     * flicker does not create a second product.
+     */
+    private fun aggregateFrameResults(
+        frames: List<List<RecognizedProduct>>
+    ): List<RecognizedProduct> {
+        data class VoteCluster(
+            val observations: MutableList<RecognizedProduct>,
+            val frameIndexes: MutableSet<Int>
+        )
+
+        val clusters = mutableListOf<VoteCluster>()
+        frames.forEachIndexed { frameIndex, detections ->
+            detections.forEach { detection ->
+                val cluster = clusters
+                    .filter { frameIndex !in it.frameIndexes }
+                    .minByOrNull { candidate ->
+                        val reference = candidate.observations.maxByOrNull { it.confidence }!!
+                        val overlap = boxIoU(reference, detection)
+                        val distance = boxCenterDistance(reference, detection)
+                        if (overlap >= 0.20f || distance <= boxDiagonal(reference) * 0.30f) {
+                            1f - overlap
+                        } else {
+                            Float.MAX_VALUE
+                        }
+                    }
+                    ?.takeIf { candidate ->
+                        val reference = candidate.observations.maxByOrNull { it.confidence }!!
+                        boxIoU(reference, detection) >= 0.20f ||
+                            boxCenterDistance(reference, detection) <= boxDiagonal(reference) * 0.30f
+                    }
+
+                if (cluster == null) {
+                    clusters.add(VoteCluster(mutableListOf(detection), mutableSetOf(frameIndex)))
+                } else {
+                    cluster.observations.add(detection)
+                    cluster.frameIndexes.add(frameIndex)
+                }
+            }
+        }
+
+        return clusters.mapNotNull { cluster ->
+            val observations = cluster.observations
+            if (observations.isEmpty()) return@mapNotNull null
+
+            // Each frame contributes at most one vote to a physical package.
+            val labelGroups = observations.groupBy { it.name.trim().lowercase() }
+            val winningGroup = labelGroups.values.maxByOrNull { group ->
+                group.size * 10f + group.sumOf { it.confidence.toDouble() }.toFloat()
+            } ?: return@mapNotNull null
+            val best = winningGroup.maxByOrNull { it.confidence } ?: return@mapNotNull null
+            val averageConfidence = winningGroup.map { it.confidence }.average().toFloat()
+            val exactDateObservation = winningGroup.firstOrNull { it.isExactDate }
+
+            best.copy(
+                confidence = averageConfidence.coerceIn(0f, 1f),
+                quantity = 1f,
+                expiresAt = exactDateObservation?.expiresAt ?: best.expiresAt,
+                isExactDate = exactDateObservation != null
+            )
+        }
+    }
+
+    private fun boxIoU(a: RecognizedProduct, b: RecognizedProduct): Float {
+        val left = maxOf(a.left, b.left)
+        val top = maxOf(a.top, b.top)
+        val right = minOf(a.right, b.right)
+        val bottom = minOf(a.bottom, b.bottom)
+        val intersection = (right - left).coerceAtLeast(0f) * (bottom - top).coerceAtLeast(0f)
+        val areaA = (a.right - a.left).coerceAtLeast(0f) * (a.bottom - a.top).coerceAtLeast(0f)
+        val areaB = (b.right - b.left).coerceAtLeast(0f) * (b.bottom - b.top).coerceAtLeast(0f)
+        val union = areaA + areaB - intersection
+        return if (union > 0f) intersection / union else 0f
+    }
+
+    private fun boxCenterDistance(a: RecognizedProduct, b: RecognizedProduct): Float {
+        val dx = (a.left + a.right - b.left - b.right) / 2f
+        val dy = (a.top + a.bottom - b.top - b.bottom) / 2f
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    private fun boxDiagonal(item: RecognizedProduct): Float {
+        val width = (item.right - item.left).coerceAtLeast(1f)
+        val height = (item.bottom - item.top).coerceAtLeast(1f)
+        return sqrt(width * width + height * height)
+    }
 
     private fun isSamePhysicalProduct(a: RecognizedProduct, b: RecognizedProduct): Boolean {
         if (!a.name.trim().equals(b.name.trim(), ignoreCase = true)) return false
