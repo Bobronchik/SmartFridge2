@@ -21,7 +21,9 @@ import com.example.smartfridge.camera.CameraRepository
 import com.example.smartfridge.camera.discoverCamera
 import com.example.smartfridge.data.AppDatabase
 import com.example.smartfridge.data.DatabaseInitializer
+import com.example.smartfridge.BuildConfig
 import com.example.smartfridge.ml.FridgeVisionPipeline
+import com.example.smartfridge.ml.GeminiProductVerifier
 import com.example.smartfridge.ml.YOLODetector
 import com.example.smartfridge.repository.SmartFridgeRepository
 import com.example.smartfridge.ui.*
@@ -112,7 +114,9 @@ private fun SmartFridgeRoot(
             val pipeline = FridgeVisionPipeline(
                 yoloDetector = detector,
                 ocr = ocr,
-                productDao = database.productDao()
+                productDao = database.productDao(),
+                geminiVerifier = BuildConfig.GEMINI_API_KEY.takeIf { it.isNotBlank() }
+                    ?.let { GeminiProductVerifier(it) }
             )
 
             repository = SmartFridgeRepository(
