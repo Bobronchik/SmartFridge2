@@ -366,7 +366,7 @@ class FridgeViewModel(
                 val y = (top + gy * step).coerceAtMost(bitmap.height - 1)
                 Color.colorToHSV(bitmap.getPixel(x, y), hsv)
                 if (hsv[1] >= 0.32f && hsv[2] >= 0.18f) {
-                    // Keep yellow and orange apart: bananas should not fall into orange.
+                    // Yellow is reserved for bananas; blue-violet is reserved for eggplants.
                     buckets[gy * gridWidth + gx] = when {
                         hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
                         hsv[0] >= 190f && hsv[0] < 285f -> 1 // blue-violet: eggplant
