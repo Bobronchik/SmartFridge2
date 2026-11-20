@@ -365,13 +365,15 @@ class FridgeViewModel(
                 val x = (left + gx * step).coerceAtMost(bitmap.width - 1)
                 val y = (top + gy * step).coerceAtMost(bitmap.height - 1)
                 Color.colorToHSV(bitmap.getPixel(x, y), hsv)
-                if (hsv[1] >= 0.32f && hsv[2] >= 0.18f) {
-                    // Yellow is reserved for bananas; blue-violet is reserved for eggplants.
+                if (hsv[2] >= 0.18f) {
+                    // Keep the original saturation threshold for banana, cucumber and pepper.
+                    // Eggplants can look muted pink-purple in phone photos, so allow lower
+                    // saturation and the magenta hue range observed on real camera frames.
                     buckets[gy * gridWidth + gx] = when {
-                        hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
-                        hsv[0] >= 190f && hsv[0] < 285f -> 1 // blue-violet: eggplant
-                        hsv[0] >= 70f && hsv[0] < 170f -> 2 // green: cucumber
-                        hsv[0] >= 345f || hsv[0] < 18f -> 3 // red: pepper
+                        hsv[1] >= 0.32f && hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
+                        hsv[1] >= 0.14f && (hsv[0] >= 190f && hsv[0] < 345f) -> 1 // blue-violet/magenta: eggplant
+                        hsv[1] >= 0.32f && hsv[0] >= 70f && hsv[0] < 170f -> 2 // green: cucumber
+                        hsv[1] >= 0.32f && (hsv[0] >= 345f || hsv[0] < 18f) -> 3 // red: pepper
                         else -> -1
                     }
                 }
