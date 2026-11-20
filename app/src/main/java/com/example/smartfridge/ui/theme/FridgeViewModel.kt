@@ -369,7 +369,7 @@ class FridgeViewModel(
                     // Keep yellow and orange apart: bananas should not fall into orange.
                     buckets[gy * gridWidth + gx] = when {
                         hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
-                        hsv[0] >= 18f && hsv[0] < 40f -> 1 // orange: orange
+                        hsv[0] >= 190f && hsv[0] < 285f -> 1 // blue-violet: eggplant
                         hsv[0] >= 70f && hsv[0] < 170f -> 2 // green: cucumber
                         hsv[0] >= 345f || hsv[0] < 18f -> 3 // red: pepper
                         else -> -1
@@ -490,7 +490,7 @@ class FridgeViewModel(
     ): RecognizedProduct {
         val (name, category, icon, shelfLifeDays) = when (bucket) {
             0 -> arrayOf("Банан", "Фрукты", "🍌", "5")
-            1 -> arrayOf("Апельсин", "Фрукты", "🍊", "14")
+            1 -> arrayOf("Баклажан", "Овощи", "🍆", "7")
             2 -> arrayOf("Огурец", "Овощи", "🥒", "7")
             else -> arrayOf("Перец", "Овощи", "🌶️", "7")
         }
