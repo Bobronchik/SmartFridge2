@@ -3,6 +3,8 @@ package com.example.smartfridge.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -94,8 +96,9 @@ fun AddProductDialog(
 
                 Column(
                     Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f, fill = true)
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(11.dp)
                 ) {
