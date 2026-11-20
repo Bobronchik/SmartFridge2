@@ -372,7 +372,7 @@ class FridgeViewModel(
                     buckets[gy * gridWidth + gx] = when {
                         hsv[1] >= 0.32f && hsv[0] >= 40f && hsv[0] < 70f -> 0 // yellow: banana
                         hsv[1] >= 0.14f && (hsv[0] >= 190f && hsv[0] < 345f) -> 1 // blue-violet/magenta: eggplant
-                        hsv[1] >= 0.32f && hsv[0] >= 70f && hsv[0] < 170f -> 2 // green: cucumber
+                        hsv[1] >= 0.12f && hsv[0] >= 70f && hsv[0] < 170f -> 2 // muted green: cucumber (phone camera)
                         hsv[1] >= 0.32f && (hsv[0] >= 345f || hsv[0] < 18f) -> 3 // red: pepper
                         else -> -1
                     }
